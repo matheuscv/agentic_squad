@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Alembic / SQLite
+*.db
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Env files
+.env
+.env.local
+.env.*
+
+# Claude local settings
+.claude/settings.local.json
+*/.claude/settings.local.json
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.npm
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
