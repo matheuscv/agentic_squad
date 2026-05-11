@@ -49,8 +49,14 @@ FLUXO DE EXECUÇÃO (siga RIGOROSAMENTE nesta ordem):
 FASE 1 — Product Owner
   → Delegue para o subagent `po-agent`
   → Input: a ideia do usuário acima
-  → Output esperado: arquivo `docs/PRD.md` criado
-  → Valide: o arquivo existe e contém requisitos funcionais claros
+  → Output esperado:
+      1. Arquivo `docs/PRD.md` criado com requisitos funcionais claros
+      2. História criada no Jira (via MCP Atlassian) com o conteúdo do PRD
+         — o agente retornará a chave da issue (ex: PROJ-42) ou erro
+  → Valide:
+      • O arquivo `docs/PRD.md` existe e contém ao menos 5 requisitos funcionais
+      • A chave Jira foi retornada pelo agente (ex: PROJ-42)
+      • Inclua a chave Jira no log de progresso da squad
 
 FASE 2 — Lead Tech
   → Delegue para o subagent `lt-agent`
@@ -83,6 +89,7 @@ RELATÓRIO FINAL
 
 Ao final, produza um resumo com:
   ✓ Caminho do PRD
+  ✓ Chave da história criada no Jira (ex: PROJ-42)
   ✓ Caminho do Plano de Execução
   ✓ Tasks executadas e por qual DEV
   ✓ Arquivos de código criados
