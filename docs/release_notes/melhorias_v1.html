@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Melhorias v1 — Squad Agentes</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 900px; margin: 0 auto; }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      border-radius: 12px;
+      padding: 2rem 2.5rem;
+      margin-bottom: 2rem;
+    }
+    header h1 { font-size: 1.8rem; margin-bottom: .4rem; }
+    header .meta { font-size: .85rem; opacity: .7; }
+    header .version {
+      display: inline-block;
+      background: #4f46e5;
+      color: #fff;
+      border-radius: 20px;
+      padding: .2rem .8rem;
+      font-size: .8rem;
+      font-weight: 600;
+      margin-top: .6rem;
+    }
+
+    .phase {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-left: 5px solid;
+    }
+    .phase-1 { border-color: #ef4444; }
+    .phase-2 { border-color: #f97316; }
+    .phase-3 { border-color: #eab308; }
+    .phase-4 { border-color: #22c55e; }
+    .phase-5 { border-color: #3b82f6; }
+
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+    }
+    .phase-header h2 { font-size: 1.15rem; }
+
+    .badge {
+      display: inline-block;
+      border-radius: 20px;
+      padding: .2rem .8rem;
+      font-size: .75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge-red    { background: #fee2e2; color: #b91c1c; }
+    .badge-orange { background: #ffedd5; color: #c2410c; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .badge-green  { background: #dcfce7; color: #15803d; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+
+    .effort {
+      margin-left: auto;
+      font-size: .8rem;
+      color: #6b7280;
+      white-space: nowrap;
+    }
+
+    .items { list-style: none; }
+    .items li {
+      padding: .75rem 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: .93rem;
+    }
+    .items li:last-child { border-bottom: none; }
+
+    .item-title {
+      font-weight: 600;
+      margin-bottom: .3rem;
+    }
+    .item-detail {
+      color: #4b5563;
+      font-size: .87rem;
+      line-height: 1.5;
+    }
+    .item-effort {
+      display: inline-block;
+      margin-top: .3rem;
+      font-size: .78rem;
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    code {
+      background: #f1f5f9;
+      color: #7c3aed;
+      border-radius: 4px;
+      padding: .1em .35em;
+      font-size: .85em;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    /* Summary table */
+    .summary-section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .summary-section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .9rem;
+    }
+    thead th {
+      background: #f8fafc;
+      text-align: left;
+      padding: .6rem .8rem;
+      border-bottom: 2px solid #e5e7eb;
+      color: #374151;
+    }
+    tbody td {
+      padding: .65rem .8rem;
+      border-bottom: 1px solid #f3f4f6;
+      color: #4b5563;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #f9fafb; }
+
+    /* Recommendation */
+    .rec-section {
+      background: #1a1a2e;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 2rem;
+    }
+    .rec-section h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #fff; }
+    .rec-block { margin-bottom: 1rem; }
+    .rec-block h3 { font-size: .88rem; color: #94a3b8; margin-bottom: .4rem; text-transform: uppercase; letter-spacing: .05em; }
+    .rec-block p { font-size: .9rem; line-height: 1.6; }
+
+    footer {
+      text-align: center;
+      font-size: .8rem;
+      color: #9ca3af;
+      padding-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Sugestões de Melhorias — Squad Agentes</h1>
+    <div class="meta">Gerado em 11 de maio de 2026 &nbsp;|&nbsp; Projeto: Contact Management App (FastAPI + Next.js 14)</div>
+    <span class="version">v1</span>
+  </header>
+
+  <!-- FASE 1 -->
+  <div class="phase phase-1">
+    <div class="phase-header">
+      <h2>Fase 1 — Correções imediatas</h2>
+      <span class="badge badge-red">Crítico</span>
+      <span class="effort">~4h estimadas</span>
+    </div>
+    <ul class="items">
+      <li>
+        <div class="item-title">1.1 Integrar Navbar no layout</div>
+        <div class="item-detail">
+          <code>Navbar.tsx</code> existe e está pronto, mas <code>frontend/src/app/layout.tsx</code> não a inclui
+          (TODO TASK-07 não concluído). Sem ela, o usuário não tem como navegar ou fazer logout pela UI.
+          Solução: descomentar <code>&lt;Navbar /&gt;</code> em <code>layout.tsx</code>.
+        </div>
+        <span class="item-effort">Esforço: &lt; 30 min</span>
+      </li>
+      <li>
+        <div class="item-title">1.2 Paginação na lista de contatos</div>
+        <div class="item-detail">
+          Backend limita a 200 registros sem offset/limit; frontend carrega tudo de uma vez.
+          <br>Backend: adicionar <code>skip: int = 0, limit: int = 20</code> em <code>GET /contatos/</code>, retornar <code>total</code> no response.
+          <br>Frontend: controles "Anterior / Próxima" em <code>ContatoTable</code>.
+        </div>
+        <span class="item-effort">Esforço: ~3h</span>
+      </li>
+      <li>
+        <div class="item-title">1.3 Toast diferenciado para erro vs sucesso</div>
+        <div class="item-detail">
+          Mensagem de erro aparece com o mesmo estilo visual de sucesso (verde).
+          Adicionar tipo <code>'sucesso' | 'erro'</code> ao estado de toast em
+          <code>frontend/src/app/contatos/page.tsx</code>.
+        </div>
+        <span class="item-effort">Esforço: ~1h</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE 2 -->
+  <div class="phase phase-2">
+    <div class="phase-header">
+      <h2>Fase 2 — Funcionalidades de UX</h2>
+      <span class="badge badge-orange">Alto</span>
+      <span class="effort">~15h estimadas</span>
+    </div>
+    <ul class="items">
+      <li>
+        <div class="item-title">2.1 Ordenação de colunas na tabela</div>
+        <div class="item-detail">
+          Clicar no header da coluna (Nome, Email, Empresa, Data) ordena ASC/DESC.
+          Backend: parâmetros <code>sort_by</code> e <code>sort_order</code> em <code>GET /contatos/</code>.
+          Frontend: ícone de seta nos headers com estado de ordenação.
+        </div>
+        <span class="item-effort">Esforço: ~4h</span>
+      </li>
+      <li>
+        <div class="item-title">2.2 CRUD completo de usuários</div>
+        <div class="item-detail">
+          Só existe <code>POST /usuarios/</code> (criar). Faltam: <code>GET /usuarios/</code>,
+          <code>GET /usuarios/{id}</code>, <code>PUT /usuarios/{id}</code>,
+          <code>DELETE /usuarios/{id}</code>, <code>PATCH /usuarios/{id}/role</code> (apenas adm).
+        </div>
+        <span class="item-effort">Esforço: ~4h (backend) + ~3h (frontend)</span>
+      </li>
+      <li>
+        <div class="item-title">2.3 Máscara e validação de telefone</div>
+        <div class="item-detail">
+          Campo telefone aceita qualquer string. Adicionar máscara <code>(99) 99999-9999</code>
+          e rejeitar formatos inválidos. Opções: <code>react-input-mask</code> ou implementação manual.
+        </div>
+        <span class="item-effort">Esforço: ~2h</span>
+      </li>
+      <li>
+        <div class="item-title">2.4 Ícones nos botões e ações</div>
+        <div class="item-detail">
+          Substituir texto puro ("Editar", "Excluir", "Novo") por ícone + texto com <code>lucide-react</code>.
+          Melhora escanabilidade e aparência profissional.
+        </div>
+        <span class="item-effort">Esforço: ~2h</span>
+      </li>
+      <li>
+        <div class="item-title">2.5 Mensagem de "sem resultados" contextual</div>
+        <div class="item-detail">
+          Atualmente: "Nenhum contato encontrado" para ambos os casos.
+          Separar: "Nenhum resultado para '[termo]'" vs "Nenhum contato cadastrado ainda."
+        </div>
+        <span class="item-effort">Esforço: &lt; 1h</span>
+      </li>
+      <li>
+        <div class="item-title">2.6 Alerta ao sair de formulário sem salvar</div>
+        <div class="item-detail">
+          <code>beforeunload</code> + modal de confirmação ao tentar navegar com formulário com alterações não salvas.
+        </div>
+        <span class="item-effort">Esforço: ~2h</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE 3 -->
+  <div class="phase phase-3">
+    <div class="phase-header">
+      <h2>Fase 3 — Qualidade e segurança</h2>
+      <span class="badge badge-yellow">Médio</span>
+      <span class="effort">~13h estimadas</span>
+    </div>
+    <ul class="items">
+      <li>
+        <div class="item-title">3.1 Cobertura de testes ≥ 80%</div>
+        <div class="item-detail">
+          Fixtures em <code>backend/tests/conftest.py</code> estão prontas.
+          Implementar os 22 testes planejados em <code>test_auth.py</code>, <code>test_usuarios.py</code>,
+          <code>test_contatos.py</code> e <code>test_services.py</code>.
+        </div>
+        <span class="item-effort">Esforço: ~4h</span>
+      </li>
+      <li>
+        <div class="item-title">3.2 PATCH (atualização parcial) em contatos</div>
+        <div class="item-detail">
+          Endpoint atual <code>PUT /contatos/{id}</code> exige todos os campos.
+          Adicionar <code>PATCH /contatos/{id}</code> com campos opcionais via Pydantic <code>Optional</code> fields.
+        </div>
+        <span class="item-effort">Esforço: ~2h</span>
+      </li>
+      <li>
+        <div class="item-title">3.3 Soft delete de contatos</div>
+        <div class="item-detail">
+          Adicionar campo <code>deletado_em: datetime | None</code> no modelo <code>Contato</code>.
+          <code>DELETE /contatos/{id}</code> passa a setar <code>deletado_em</code> em vez de apagar fisicamente.
+          Endpoint <code>GET /contatos/lixeira</code> para admins.
+        </div>
+        <span class="item-effort">Esforço: ~3h + migração Alembic</span>
+      </li>
+      <li>
+        <div class="item-title">3.4 Auditoria básica (quem criou/modificou)</div>
+        <div class="item-detail">
+          Adicionar <code>criado_por_id</code> e <code>atualizado_por_id</code> (FK → Usuario) na tabela Contato.
+          Popular automaticamente via dependency <code>require_adm</code>.
+        </div>
+        <span class="item-effort">Esforço: ~3h + migração</span>
+      </li>
+      <li>
+        <div class="item-title">3.5 Rate limiting na API</div>
+        <div class="item-detail">
+          Usar <code>slowapi</code> (FastAPI-compatible) para limitar <code>POST /auth/login</code>
+          (ex: 5 req/min por IP) e prevenir ataques de força bruta.
+        </div>
+        <span class="item-effort">Esforço: ~1h</span>
+      </li>
+      <li>
+        <div class="item-title">3.6 Validação robusta no frontend com Zod</div>
+        <div class="item-detail">
+          Substituir regex manuais por schemas Zod em todos os formulários
+          (login, cadastro, contato). Melhora mensagens de erro e type-safety.
+        </div>
+        <span class="item-effort">Esforço: ~3h</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE 4 -->
+  <div class="phase phase-4">
+    <div class="phase-header">
+      <h2>Fase 4 — Novas funcionalidades</h2>
+      <span class="badge badge-green">Valor de negócio</span>
+      <span class="effort">~26h estimadas</span>
+    </div>
+    <ul class="items">
+      <li>
+        <div class="item-title">4.1 Filtros avançados de contatos</div>
+        <div class="item-detail">
+          Filtrar por: empresa específica, data de criação (range), sem email, sem telefone.
+          Painel "Filtros" colapsável na página de lista.
+        </div>
+        <span class="item-effort">Esforço: ~5h</span>
+      </li>
+      <li>
+        <div class="item-title">4.2 Exportar contatos (CSV / Excel)</div>
+        <div class="item-detail">
+          Botão "Exportar" gera arquivo com os contatos da listagem atual (respeitando filtros/busca).
+          Backend: endpoint <code>GET /contatos/export?format=csv</code>.
+        </div>
+        <span class="item-effort">Esforço: ~4h</span>
+      </li>
+      <li>
+        <div class="item-title">4.3 Importar contatos via CSV</div>
+        <div class="item-detail">
+          Upload de arquivo CSV com mapeamento de colunas e preview antes de confirmar a importação.
+        </div>
+        <span class="item-effort">Esforço: ~6h</span>
+      </li>
+      <li>
+        <div class="item-title">4.4 Dashboard / métricas</div>
+        <div class="item-detail">
+          Tela <code>/dashboard</code> com contadores: total de contatos, adicionados este mês, por empresa.
+          Backend: <code>GET /stats</code> com agregações SQL.
+        </div>
+        <span class="item-effort">Esforço: ~5h</span>
+      </li>
+      <li>
+        <div class="item-title">4.5 Recuperação de senha por e-mail</div>
+        <div class="item-detail">
+          <code>POST /auth/forgot-password</code> envia link de reset;
+          <code>POST /auth/reset-password</code> valida token e redefine senha.
+          Requer configuração de SMTP (ex: SendGrid, Resend).
+        </div>
+        <span class="item-effort">Esforço: ~6h</span>
+      </li>
+      <li>
+        <div class="item-title">4.6 Tags / categorias em contatos</div>
+        <div class="item-detail">
+          Campo <code>tags: list[str]</code> no modelo Contato (JSON ou tabela separada).
+          Filtrar por tag na listagem.
+        </div>
+        <span class="item-effort">Esforço: ~5h</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE 5 -->
+  <div class="phase phase-5">
+    <div class="phase-header">
+      <h2>Fase 5 — Infraestrutura e operação</h2>
+      <span class="badge badge-blue">Operacional</span>
+      <span class="effort">~16h estimadas</span>
+    </div>
+    <ul class="items">
+      <li>
+        <div class="item-title">5.1 Docker Compose</div>
+        <div class="item-detail">
+          <code>docker-compose.yml</code> com serviços: <code>api</code> (FastAPI),
+          <code>frontend</code> (Next.js), <code>db</code> (PostgreSQL).
+        </div>
+        <span class="item-effort">Esforço: ~3h</span>
+      </li>
+      <li>
+        <div class="item-title">5.2 Migrar de SQLite para PostgreSQL</div>
+        <div class="item-detail">
+          Atualizar <code>DATABASE_URL</code> para <code>postgresql+asyncpg://...</code>,
+          ajustar tipos (UUID, arrays). Rodar testes na nova engine.
+        </div>
+        <span class="item-effort">Esforço: ~3h + testes</span>
+      </li>
+      <li>
+        <div class="item-title">5.3 CI/CD com GitHub Actions</div>
+        <div class="item-detail">
+          Pipeline: lint → testes backend → build frontend → deploy
+          (Railway, Render ou Vercel).
+        </div>
+        <span class="item-effort">Esforço: ~4h</span>
+      </li>
+      <li>
+        <div class="item-title">5.4 Monitoramento de erros (Sentry)</div>
+        <div class="item-detail">
+          Integrar Sentry no backend (FastAPI middleware) e frontend (<code>@sentry/nextjs</code>).
+        </div>
+        <span class="item-effort">Esforço: ~2h</span>
+      </li>
+      <li>
+        <div class="item-title">5.5 Dark mode</div>
+        <div class="item-detail">
+          Tailwind <code>dark:</code> classes + toggle no Navbar + persistência via <code>localStorage</code>.
+        </div>
+        <span class="item-effort">Esforço: ~4h</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- RESUMO -->
+  <div class="summary-section">
+    <h2>Resumo por fase</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Fase</th>
+          <th>Principais itens</th>
+          <th>Esforço estimado</th>
+          <th>Impacto</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1 — Correções imediatas</strong></td>
+          <td>Navbar, paginação, toast</td>
+          <td>~4h</td>
+          <td><span class="badge badge-red">Crítico</span></td>
+        </tr>
+        <tr>
+          <td><strong>2 — UX</strong></td>
+          <td>Ordenação, CRUD usuários, máscara, ícones</td>
+          <td>~15h</td>
+          <td><span class="badge badge-orange">Alto</span></td>
+        </tr>
+        <tr>
+          <td><strong>3 — Qualidade</strong></td>
+          <td>Testes, PATCH, soft delete, auditoria</td>
+          <td>~13h</td>
+          <td><span class="badge badge-yellow">Médio</span></td>
+        </tr>
+        <tr>
+          <td><strong>4 — Funcionalidades</strong></td>
+          <td>Filtros, export, import, dashboard, tags</td>
+          <td>~26h</td>
+          <td><span class="badge badge-green">Valor de negócio</span></td>
+        </tr>
+        <tr>
+          <td><strong>5 — Infraestrutura</strong></td>
+          <td>Docker, PostgreSQL, CI/CD, Sentry, dark mode</td>
+          <td>~16h</td>
+          <td><span class="badge badge-blue">Operacional</span></td>
+        </tr>
+        <tr style="font-weight:600; background:#f8fafc;">
+          <td colspan="2"><strong>Total estimado</strong></td>
+          <td><strong>~74h</strong></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- RECOMENDAÇÃO -->
+  <div class="rec-section">
+    <h2>Recomendação de sequência</h2>
+    <div class="rec-block">
+      <h3>Para produção com qualidade</h3>
+      <p>Fase 1 &rarr; Fase 3.1 (testes) &rarr; Fase 2 &rarr; Fase 5.1 (Docker) &rarr; Fase 4</p>
+    </div>
+    <div class="rec-block">
+      <h3>Para demo / portfólio</h3>
+      <p>Fase 1 &rarr; Fase 2 &rarr; Fase 4.4 (dashboard) &rarr; Fase 5.5 (dark mode)</p>
+    </div>
+  </div>
+
+  <footer>
+    Squad Agentes &mdash; Release Notes v1 &mdash; 2026-05-11
+  </footer>
+
+</div>
+</body>
+</html>

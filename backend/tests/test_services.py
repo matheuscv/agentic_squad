@@ -240,57 +240,64 @@ def test_criar_contato_email_duplicado_levanta_400(db_session):
 
 def test_listar_contatos_retorna_lista_vazia_quando_banco_vazio(db_session):
     """listar_contatos deve retornar lista vazia quando não há registros."""
-    resultado = contato_service.listar_contatos(db_session)
-    assert resultado == []
+    items, total = contato_service.listar_contatos(db_session)
+    assert items == []
+    assert total == 0
 
 
 def test_listar_contatos_retorna_todos_sem_filtro(db_session):
     """listar_contatos sem busca deve retornar todos os contatos inseridos."""
     contato_service.criar_contato(db_session, ContatoCriar(nome="A", email="a@test.com"))
     contato_service.criar_contato(db_session, ContatoCriar(nome="B", email="b@test.com"))
-    resultado = contato_service.listar_contatos(db_session)
-    assert len(resultado) == 2
+    items, total = contato_service.listar_contatos(db_session)
+    assert len(items) == 2
+    assert total == 2
 
 
 def test_listar_contatos_busca_por_nome(db_session):
     """Busca por nome deve retornar apenas contatos correspondentes."""
     contato_service.criar_contato(db_session, ContatoCriar(nome="Ana Lima", email="ana@test.com"))
     contato_service.criar_contato(db_session, ContatoCriar(nome="Carlos Melo", email="carlos@test.com"))
-    resultado = contato_service.listar_contatos(db_session, busca="Ana")
-    assert len(resultado) == 1
-    assert resultado[0].nome == "Ana Lima"
+    items, total = contato_service.listar_contatos(db_session, busca="Ana")
+    assert len(items) == 1
+    assert total == 1
+    assert items[0].nome == "Ana Lima"
 
 
 def test_listar_contatos_busca_por_email(db_session):
     """Busca pelo email deve retornar o contato correto."""
     contato_service.criar_contato(db_session, ContatoCriar(nome="Teste Email", email="unico@empresa.com"))
     contato_service.criar_contato(db_session, ContatoCriar(nome="Outro", email="outro@outro.com"))
-    resultado = contato_service.listar_contatos(db_session, busca="unico@empresa.com")
-    assert len(resultado) == 1
-    assert resultado[0].email == "unico@empresa.com"
+    items, total = contato_service.listar_contatos(db_session, busca="unico@empresa.com")
+    assert len(items) == 1
+    assert total == 1
+    assert items[0].email == "unico@empresa.com"
 
 
 def test_listar_contatos_busca_por_empresa(db_session):
     """Busca pelo nome da empresa deve retornar contatos correspondentes."""
     contato_service.criar_contato(db_session, ContatoCriar(nome="F1", email="f1@test.com", empresa="TechCorp"))
     contato_service.criar_contato(db_session, ContatoCriar(nome="F2", email="f2@test.com", empresa="OldCo"))
-    resultado = contato_service.listar_contatos(db_session, busca="TechCorp")
-    assert len(resultado) == 1
-    assert resultado[0].empresa == "TechCorp"
+    items, total = contato_service.listar_contatos(db_session, busca="TechCorp")
+    assert len(items) == 1
+    assert total == 1
+    assert items[0].empresa == "TechCorp"
 
 
 def test_listar_contatos_busca_case_insensitive(db_session):
     """Busca em maiúsculas deve encontrar registros com nome em minúsculas e vice-versa."""
     contato_service.criar_contato(db_session, ContatoCriar(nome="zelia moura", email="zelia@test.com"))
-    resultado = contato_service.listar_contatos(db_session, busca="ZELIA")
-    assert len(resultado) == 1
+    items, total = contato_service.listar_contatos(db_session, busca="ZELIA")
+    assert len(items) == 1
+    assert total == 1
 
 
 def test_listar_contatos_busca_sem_resultados_retorna_lista_vazia(db_session):
     """Busca sem correspondência deve retornar lista vazia."""
     contato_service.criar_contato(db_session, ContatoCriar(nome="Pessoa X", email="x@test.com"))
-    resultado = contato_service.listar_contatos(db_session, busca="TermoInexistente99")
-    assert resultado == []
+    items, total = contato_service.listar_contatos(db_session, busca="TermoInexistente99")
+    assert items == []
+    assert total == 0
 
 
 def test_listar_contatos_busca_string_vazia_retorna_todos(db_session):
@@ -298,8 +305,9 @@ def test_listar_contatos_busca_string_vazia_retorna_todos(db_session):
     contato_service.criar_contato(db_session, ContatoCriar(nome="Alpha", email="alpha@test.com"))
     contato_service.criar_contato(db_session, ContatoCriar(nome="Beta", email="beta@test.com"))
     # String vazia é falsy em Python, logo o service não aplica filtro
-    resultado = contato_service.listar_contatos(db_session, busca="")
-    assert len(resultado) == 2
+    items, total = contato_service.listar_contatos(db_session, busca="")
+    assert len(items) == 2
+    assert total == 2
 
 
 # ===========================================================================

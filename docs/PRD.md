@@ -220,3 +220,86 @@ projeto/
 - Notificações por e-mail
 - Autenticação via OAuth / redes sociais
 - Testes de integração end-to-end (E2E) no frontend
+
+---
+
+## 13. Fase 1 — Correções Imediatas
+
+> **Data de referência:** 2026-05-11
+> Conjunto de correções de baixa complexidade que eliminam bloqueadores de usabilidade identificados no MVP entregue.
+
+---
+
+### 13.1 Visão Geral da Fase 1
+
+Três defeitos impedem o uso pleno da aplicação: ausência da barra de navegação em todas as telas, listagem sem paginação (risco de sobrecarga com bases maiores) e feedback visual de erro indistinguível de sucesso. Esta fase corrige os três pontos sem alterar funcionalidades existentes.
+
+---
+
+### 13.2 Requisitos Funcionais — Fase 1
+
+- **RF-F1-01 — Navbar presente em todas as telas**: O componente `Navbar.tsx` deve ser incluído no arquivo `frontend/src/app/layout.tsx`, tornando a barra de navegação visível em todas as páginas da aplicação, incluindo a opção de logout e identificação do usuário logado.
+
+- **RF-F1-02 — Navbar não exibida na tela de login**: A `Navbar` deve ser renderizada condicionalmente: não deve aparecer na rota `/login` nem em `/cadastro`, evitando elementos de navegação em telas públicas.
+
+- **RF-F1-03 — Paginação no backend de contatos**: O endpoint `GET /contatos/` deve aceitar os parâmetros de query `skip: int = 0` e `limit: int = 20`. A resposta deve incluir o campo `total` (contagem total de registros que atendem ao filtro), além da lista `items` com os registros da página atual.
+
+- **RF-F1-04 — Paginação no frontend de contatos**: O componente `ContatoTable` (ou a página `contatos/page.tsx`) deve exibir controles de paginação "Anterior" e "Próxima", refletindo a página atual e desabilitando o botão correspondente quando não houver página anterior ou próxima. O número da página atual e o total de registros devem ser exibidos ao usuário.
+
+- **RF-F1-05 — Toast com tipos visuais distintos**: O estado de toast em `frontend/src/app/contatos/page.tsx` deve suportar o tipo `'sucesso' | 'erro'`. Toasts de sucesso devem usar estilo verde (comportamento atual). Toasts de erro devem usar estilo vermelho/destrutivo, claramente diferenciado do sucesso.
+
+- **RF-F1-06 — Uso do toast de erro em todas as falhas**: Toda chamada à API que resultar em erro (catch de exceção ou resposta HTTP >= 400) deve acionar o toast com tipo `'erro'`, substituindo qualquer uso atual de toast de sucesso para cobrir cenários de falha.
+
+---
+
+### 13.3 Regras de Negócio — Fase 1
+
+- **RN-F1-01**: O valor padrão de `limit` no backend é 20 registros por página; o valor máximo permitido é 200 (para manter compatibilidade com clientes existentes que não enviam parâmetros).
+- **RN-F1-02**: A paginação do frontend deve resetar para a primeira página sempre que o usuário alterar o filtro de busca.
+- **RN-F1-03**: A Navbar não deve ser exibida para usuários não autenticados (rotas públicas: `/login`, `/cadastro`).
+
+---
+
+### 13.4 Critérios de Aceite — Fase 1
+
+#### RF-F1-01 / RF-F1-02 — Navbar
+- [ ] Acessar `/contatos` exibe a Navbar com nome do usuário e botão de logout
+- [ ] Acessar `/login` não exibe a Navbar
+- [ ] Clicar em logout na Navbar encerra a sessão e redireciona para `/login`
+
+#### RF-F1-03 / RF-F1-04 — Paginação
+- [ ] `GET /contatos/?skip=0&limit=20` retorna JSON com campos `items` (array) e `total` (inteiro)
+- [ ] `GET /contatos/` sem parâmetros retorna os primeiros 20 registros (padrão)
+- [ ] `GET /contatos/?skip=0&limit=200` retorna até 200 registros (compatibilidade)
+- [ ] A interface exibe botão "Próxima" desabilitado quando estiver na última página
+- [ ] A interface exibe botão "Anterior" desabilitado quando estiver na primeira página
+- [ ] Alterar o filtro de busca reseta a listagem para a página 1
+- [ ] O total de registros é exibido na interface (ex.: "1–20 de 87 contatos")
+
+#### RF-F1-05 / RF-F1-06 — Toast diferenciado
+- [ ] Após salvar um contato com sucesso, o toast exibe fundo verde
+- [ ] Após falha em salvar (ex.: e-mail duplicado), o toast exibe fundo vermelho/destrutivo
+- [ ] As duas variantes têm texto de cor legível (contraste suficiente)
+- [ ] Nenhum cenário de erro usa o estilo de toast de sucesso
+
+---
+
+### 13.5 Arquivos Impactados
+
+| Arquivo | Tipo de alteração |
+|---|---|
+| `frontend/src/app/layout.tsx` | Inclusão do componente `<Navbar />` com renderização condicional |
+| `frontend/src/app/contatos/page.tsx` | Adição de estado de tipo de toast + controles de paginação |
+| `frontend/src/components/ContatoTable.tsx` | Adição de props de paginação e controles "Anterior / Próxima" |
+| `backend/app/routers/contatos.py` | Adição dos parâmetros `skip` e `limit` + campo `total` no response |
+| `backend/app/schemas/contato.py` | Adição do schema `ContatoListResponse` com `items` e `total` |
+
+---
+
+### 13.6 Fora de Escopo da Fase 1
+
+- Paginação cursor-based ou infinite scroll
+- Alteração de tamanho de página pelo usuário (page size configurável)
+- Persistência da página atual entre navegações
+- Animações de transição no toast
+- Testes E2E de frontend

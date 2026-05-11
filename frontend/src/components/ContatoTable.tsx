@@ -10,6 +10,12 @@ interface ContatoTableProps {
   onEditar: (id: number) => void
   onExcluir: (id: number) => void
   loading: boolean
+  // Props de paginação (adicionadas na TASK-04)
+  paginaAtual: number
+  totalRegistros: number
+  limite: number
+  onPaginaAnterior: () => void
+  onProximaPagina: () => void
 }
 
 // Skeleton de linha para estado de carregamento
@@ -31,8 +37,19 @@ export default function ContatoTable({
   onEditar,
   onExcluir,
   loading,
+  paginaAtual,
+  totalRegistros,
+  limite,
+  onPaginaAnterior,
+  onProximaPagina,
 }: ContatoTableProps) {
   const router = useRouter()
+
+  // Cálculos de paginação
+  const totalPaginas = Math.ceil(totalRegistros / limite)
+  // Índice do primeiro e último item exibido na página atual (1-based)
+  const inicio = totalRegistros === 0 ? 0 : (paginaAtual - 1) * limite + 1
+  const fim = Math.min(paginaAtual * limite, totalRegistros)
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -111,6 +128,39 @@ export default function ContatoTable({
             ))}
         </tbody>
       </table>
+      {/* Barra de paginação — exibida abaixo da tabela */}
+      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-white">
+        {/* Texto informativo: "1–20 de 87 contatos" */}
+        <span className="text-sm text-gray-600">
+          {totalRegistros === 0
+            ? '0 contatos'
+            : `${inicio}–${fim} de ${totalRegistros} contatos`}
+        </span>
+
+        <div className="flex gap-2">
+          {/* Botão Anterior */}
+          <button
+            onClick={onPaginaAnterior}
+            disabled={paginaAtual === 1}
+            className={`px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+              paginaAtual === 1 ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            Anterior
+          </button>
+
+          {/* Botão Próxima */}
+          <button
+            onClick={onProximaPagina}
+            disabled={paginaAtual >= totalPaginas}
+            className={`px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+              paginaAtual >= totalPaginas ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            Próxima
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

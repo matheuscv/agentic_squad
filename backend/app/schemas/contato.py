@@ -49,3 +49,14 @@ class ContatoResposta(BaseModel):
     observacoes: str | None
     criado_em: datetime
     atualizado_em: datetime
+
+
+class ContatoListResponse(BaseModel):
+    """Schema de resposta paginada para listagem de contatos.
+
+    - items: registros da página atual
+    - total: contagem total de registros que atendem ao filtro de busca
+    """
+
+    items: list[ContatoResposta]
+    total: int

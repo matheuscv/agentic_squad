@@ -12,6 +12,9 @@ import {
   excluirContato,
 } from '../../services/contatos.service'
 
+// Quantidade de registros por página (constante fixa, conservadora e alinhada ao PRD)
+const LIMITE = 20
+
 // ------------------------------------------------------------------
 // Conteúdo interno da página (dentro do ProtectedRoute)
 // Separado para que os hooks só rodem após a proteção ser confirmada.
@@ -29,22 +32,26 @@ function ContatosPageContent() {
   const [busca, setBusca] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Paginação
+  const [paginaAtual, setPaginaAtual] = useState(1)
+  const [totalRegistros, setTotalRegistros] = useState(0)
+
   // Modal de exclusão
   const [modalAberto, setModalAberto] = useState(false)
   const [contatoParaExcluir, setContatoParaExcluir] = useState<number | null>(null)
   const [excluindo, setExcluindo] = useState(false)
 
-  // Toast de sucesso
-  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  // Toast tipado: distingue sucesso (verde) de erro (vermelho)
+  const [toastMsg, setToastMsg] = useState<{ mensagem: string; tipo: 'sucesso' | 'erro' } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ------------------------------------------------------------------
-  // Carregamento inicial
+  // Carregamento inicial e ao mudar de página
   // ------------------------------------------------------------------
   useEffect(() => {
-    carregarContatos()
+    carregarContatos(busca, paginaAtual)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [paginaAtual])
 
   // Limpa timers ao desmontar para evitar memory leaks
   useEffect(() => {
@@ -54,12 +61,15 @@ function ContatosPageContent() {
     }
   }, [])
 
-  async function carregarContatos(termo?: string) {
+  async function carregarContatos(termo?: string, pagina: number = 1) {
     setLoading(true)
     setErro(null)
     try {
-      const dados = await listarContatos(termo)
-      setContatos(dados)
+      const skip = (pagina - 1) * LIMITE
+      const resposta = await listarContatos(termo, skip, LIMITE)
+      // O backend retorna { items, total } após TASK-01
+      setContatos(resposta.items)
+      setTotalRegistros(resposta.total)
     } catch {
       setErro('Não foi possível carregar os contatos. Tente novamente.')
     } finally {
@@ -79,11 +89,25 @@ function ContatosPageContent() {
       if (debounceRef.current) clearTimeout(debounceRef.current)
 
       debounceRef.current = setTimeout(() => {
-        carregarContatos(valor)
+        // Ao mudar o filtro, volta para a primeira página e carrega
+        setPaginaAtual(1)
+        carregarContatos(valor, 1)
       }, 400)
     },
     []
   )
+
+  // ------------------------------------------------------------------
+  // Handlers de paginação
+  // ------------------------------------------------------------------
+  function handlePaginaAnterior() {
+    setPaginaAtual((p) => Math.max(1, p - 1))
+  }
+
+  function handleProximaPagina() {
+    const totalPaginas = Math.ceil(totalRegistros / LIMITE)
+    setPaginaAtual((p) => Math.min(totalPaginas, p + 1))
+  }
 
   // ------------------------------------------------------------------
   // Navegação
@@ -110,24 +134,24 @@ function ContatosPageContent() {
       setContatos((prev: Contato[]) => prev.filter((c: Contato) => c.id !== contatoParaExcluir))
       setModalAberto(false)
       setContatoParaExcluir(null)
-      exibirToast('Contato excluído com sucesso!')
+      exibirToast('Contato excluído com sucesso!', 'sucesso')
     } catch {
-      // Fecha o modal e informa o erro via toast vermelho (mesmo padrão visual,
-      // mensagem de erro em PT-BR)
+      // Fecha o modal e informa o erro via toast vermelho
       setModalAberto(false)
-      exibirToast('Erro ao excluir o contato. Tente novamente.')
+      exibirToast('Erro ao excluir o contato. Tente novamente.', 'erro')
     } finally {
       setExcluindo(false)
     }
   }
 
   // ------------------------------------------------------------------
-  // Toast: exibe por 3 segundos e some
+  // Toast: exibe por 3 segundos e some.
+  // O parâmetro `tipo` determina a cor de fundo no JSX.
   // ------------------------------------------------------------------
-  function exibirToast(msg: string) {
+  function exibirToast(msg: string, tipo: 'sucesso' | 'erro') {
     // Cancela toast anterior se existir
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-    setToastMsg(msg)
+    setToastMsg({ mensagem: msg, tipo })
     toastTimerRef.current = setTimeout(() => {
       setToastMsg(null)
     }, 3000)
@@ -173,13 +197,18 @@ function ContatosPageContent() {
         </div>
       )}
 
-      {/* Tabela de contatos */}
+      {/* Tabela de contatos com paginação */}
       <ContatoTable
         contatos={contatos}
         isAdm={isAdm}
         onEditar={handleEditar}
         onExcluir={handleExcluir}
         loading={loading}
+        paginaAtual={paginaAtual}
+        totalRegistros={totalRegistros}
+        limite={LIMITE}
+        onPaginaAnterior={handlePaginaAnterior}
+        onProximaPagina={handleProximaPagina}
       />
 
       {/* Modal de confirmação de exclusão */}
@@ -192,14 +221,17 @@ function ContatosPageContent() {
         loading={excluindo}
       />
 
-      {/* Toast de sucesso (fixo no canto superior direito, desaparece após 3s) */}
+      {/* Toast tipado (fixo no canto superior direito, desaparece após 3s).
+          Sucesso: fundo verde. Erro: fundo vermelho. */}
       {toastMsg && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed top-4 right-4 z-50 px-5 py-3 bg-green-600 text-white text-sm font-medium rounded-lg shadow-lg transition-opacity"
+          className={`fixed top-4 right-4 z-50 px-5 py-3 text-white text-sm font-medium rounded-lg shadow-lg transition-opacity ${
+            toastMsg.tipo === 'sucesso' ? 'bg-green-500' : 'bg-red-600'
+          }`}
         >
-          {toastMsg}
+          {toastMsg.mensagem}
         </div>
       )}
     </div>

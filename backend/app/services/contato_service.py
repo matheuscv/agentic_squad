@@ -3,32 +3,48 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.contato import Contato
 from app.schemas.contato import ContatoCriar, ContatoAtualizar
 
 
-def listar_contatos(db: Session, busca: str | None = None) -> list[Contato]:
-    """Retorna até 200 contatos.
+def listar_contatos(
+    db: Session,
+    busca: str | None = None,
+    skip: int = 0,
+    limit: int = 20,
+) -> tuple[list[Contato], int]:
+    """Retorna uma tupla (items, total) com paginação.
+
+    - items: registros da página, aplicando OFFSET skip LIMIT limit
+    - total: contagem total de registros que atendem ao filtro de busca
 
     Se `busca` for fornecido, filtra com LIKE case-insensitive (ilike) nos
     campos nome, email e empresa (OR entre eles).
     """
-    stmt = select(Contato)
+    # Predicado de filtro reutilizado tanto no COUNT quanto na consulta paginada
+    stmt_base = select(Contato)
 
     if busca:
         termo = f"%{busca}%"
-        stmt = stmt.where(
+        filtro = (
             Contato.nome.ilike(termo)
             | Contato.email.ilike(termo)
             | Contato.empresa.ilike(termo)
         )
+        stmt_base = stmt_base.where(filtro)
 
-    stmt = stmt.limit(200)
-    resultado = db.execute(stmt)
-    return list(resultado.scalars().all())
+    # COUNT com o mesmo filtro para calcular total real
+    stmt_count = select(func.count()).select_from(stmt_base.subquery())
+    total: int = db.execute(stmt_count).scalar_one()
+
+    # Consulta paginada
+    stmt_paginada = stmt_base.offset(skip).limit(limit)
+    items = list(db.execute(stmt_paginada).scalars().all())
+
+    return items, total
 
 
 def buscar_contato(db: Session, id: int) -> Contato:

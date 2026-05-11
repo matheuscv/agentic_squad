@@ -25,10 +25,13 @@ def _auth_header(token: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def test_listar_contatos_autenticado(client, usuario_default_token):
-    """GET /contatos/ com token válido deve retornar 200 e uma lista."""
+    """GET /contatos/ com token válido deve retornar 200 e objeto paginado."""
     resp = client.get("/contatos/", headers=_auth_header(usuario_default_token))
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    data = resp.json()
+    assert "items" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
 
 
 def test_listar_contatos_sem_token(client):
@@ -49,7 +52,7 @@ def test_busca_por_nome(client, usuario_default_token, contato_exemplo):
         headers=_auth_header(usuario_default_token),
     )
     assert resp.status_code == 200
-    data = resp.json()
+    data = resp.json()["items"]
     assert len(data) >= 1
     # Todos os resultados devem conter o nome buscado (case-insensitive)
     nome_lower = contato_exemplo.nome.lower()
@@ -71,7 +74,7 @@ def test_busca_case_insensitive(client, usuario_default_token, contato_exemplo):
         headers=_auth_header(usuario_default_token),
     )
     assert resp.status_code == 200
-    ids_retornados = [c["id"] for c in resp.json()]
+    ids_retornados = [c["id"] for c in resp.json()["items"]]
     assert contato_exemplo.id in ids_retornados
 
 

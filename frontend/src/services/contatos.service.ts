@@ -5,16 +5,33 @@
 import api from './api'
 import { Contato, ContatoForm } from '../types/index'
 
+// Formato da resposta paginada retornada pelo backend (TASK-01)
+export interface ContatosPageResponse {
+  items: Contato[]
+  total: number
+}
+
 /**
- * Lista contatos. Passa o parâmetro `busca` como query string quando fornecido.
- * O backend faz LIKE case-insensitive em nome, e-mail e empresa.
+ * Lista contatos com suporte a paginação e busca.
+ * - `busca`: filtra por nome, e-mail ou empresa (LIKE case-insensitive no backend)
+ * - `skip`: quantos registros pular (offset)
+ * - `limit`: quantos registros retornar
+ * O backend retorna `{ items: [...], total: N }`.
  */
-export async function listarContatos(busca?: string): Promise<Contato[]> {
-  const params: Record<string, string> = {}
+export async function listarContatos(
+  busca?: string,
+  skip?: number,
+  limit?: number
+): Promise<ContatosPageResponse> {
+  const params: Record<string, string | number> = {}
   if (busca && busca.trim() !== '') {
     params.busca = busca.trim()
   }
-  const response = await api.get<Contato[]>('/contatos/', { params })
+  // Inclui skip/limit apenas quando explicitamente fornecidos
+  if (skip !== undefined) params.skip = skip
+  if (limit !== undefined) params.limit = limit
+
+  const response = await api.get<ContatosPageResponse>('/contatos/', { params })
   return response.data
 }
 

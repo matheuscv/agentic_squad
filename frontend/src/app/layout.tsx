@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '../hooks/useAuth'
+import NavbarWrapper from '../components/NavbarWrapper'
 
 export const metadata: Metadata = {
   title: 'Manutenção de Contatos',
@@ -18,7 +19,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body>
         <AuthProvider>
-          {/* TODO: <Navbar /> será adicionada na TASK-07 */}
+          <NavbarWrapper />
           {children}
         </AuthProvider>
       </body>

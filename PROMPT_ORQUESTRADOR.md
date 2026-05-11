@@ -15,21 +15,32 @@ NA ORDEM EXATA abaixo. Você NÃO executa o trabalho — você apenas
 delega via Task tool e valida a entrega de cada etapa antes de passar
 para a próxima. Antes de delegar uma nova atividade para um agente, 
 PEÇA A MINHA PERMISSÃO me indicando: Qual atividade será atribuida a qual 
-agente. Após p meu aceite, siga com a atribuição da atividade. 
+agente. SEMPRE QUE POSSÍVEL, demande atividades simultâneas para os agentes (não necessita ser sequencial). 
+Após o meu aceite, siga com a atribuição da atividade. 
 Vá logando na console, quais agentes estão trabalhando 
 em que atividade do plano de desenvolvimento
 
 ═══════════════════════════════════════════════════════════════════
 IDEIA DO USUÁRIO (substitua entre as aspas antes de rodar):
 ═══════════════════════════════════════════════════════════════════
-Criar uma aplicação divida em frontend e backend, coma finalidade de ser uma aplicação de Manutenção de Contatos de Clientes, considerando as informações / premissas abaixo:
+Agora precisaremos evoluir este projeto com algumas melhorias e novas funcionalidades. O plano será 
+feito em fases, e abaixo segue o escopo a ser considerado para a fase atual.
 
-* Frontend com layout bem acabado, com temas claros, utilizando como stack tecnologia: Next.js + typescript
-* Backend se integrando com o frontend utilizando FastAPI com Python, banco de dados SQLite, autenticação JWT, testes unitários com Pytest
-* Aplicação rodando apenas na máquina local, com servidores separados (frontend e backend em camadas separadas)
-* Deverá ter 2 níveis de usuários: default e adm, onde o usuário com perfil default apenas pesquisa e lista os contatos cadastrados, enquanto que o usuário com perfil ADM poderá também Incluir, Excluir e Alterar dados de contato. 
-* A aplicação deverá ter uma tela de login, com autenticação JWT, com a funcionalidade de criar um novo cadastro, inicialmente sempre com a role "default", a alteração da role do usuário, somente poderá ser feita diretamente no banco de dados
-* qualquer outra necessidade adicional ou dúvida - deverá me perguntar
+Fase 1 — Correções imediatas
+
+1.1 Integrar Navbar no layout
+Navbar.tsx existe e está pronto, mas frontend/src/app/layout.tsx não a inclui (TODO TASK-07 não 
+concluído). Sem ela, o usuário não tem como navegar ou fazer logout pela UI. Solução: descomentar 
+<Navbar /> em layout.tsx.
+
+1.2 Paginação na lista de contatos
+Backend limita a 200 registros sem offset/limit; frontend carrega tudo de uma vez.
+Backend: adicionar skip: int = 0, limit: int = 20 em GET /contatos/, retornar total no response.
+Frontend: controles "Anterior / Próxima" em ContatoTable.
+
+1.3 Toast diferenciado para erro vs sucesso
+Mensagem de erro aparece com o mesmo estilo visual de sucesso (verde). Adicionar tipo 
+'sucesso' | 'erro' ao estado de toast em frontend/src/app/contatos/page.tsx.
 
 ═══════════════════════════════════════════════════════════════════
 FLUXO DE EXECUÇÃO (siga RIGOROSAMENTE nesta ordem):
