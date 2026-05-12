@@ -1,8 +1,9 @@
 """Schemas Pydantic v2 para o recurso Contato."""
 
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, model_validator
 
 
 class ContatoCriar(BaseModel):
@@ -36,6 +37,44 @@ class ContatoAtualizar(BaseModel):
     observacoes: str | None = None
 
 
+class ContatoPatch(BaseModel):
+    """Payload para atualização parcial via PATCH /contatos/{id}.
+
+    Todos os campos são opcionais. Pelo menos um campo deve ser fornecido
+    (não-None); caso contrário, o validador levanta ValueError → HTTP 422.
+
+    Validação de formato de telefone reutiliza a mesma regex de ContatoCriar:
+    (DD) DDDD-DDDD  (fixo, 10 dígitos) ou (DD) DDDDD-DDDD (celular, 11 dígitos).
+    """
+
+    nome: Optional[str] = None
+    email: Optional[EmailStr] = None
+    telefone: Optional[str] = None
+    empresa: Optional[str] = None
+    observacoes: Optional[str] = None
+
+    @field_validator("telefone")
+    @classmethod
+    def validar_telefone(cls, v: Optional[str]) -> Optional[str]:
+        import re
+        if v is None:
+            return v
+        padrao = r"^\(\d{2}\) \d{4,5}-\d{4}$"
+        if not re.match(padrao, v):
+            raise ValueError(
+                "Formato de telefone inválido. Use (99) 9999-9999 ou (99) 99999-9999."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def ao_menos_um_campo(self) -> "ContatoPatch":
+        """Garante que pelo menos um campo seja fornecido no body."""
+        campos = (self.nome, self.email, self.telefone, self.empresa, self.observacoes)
+        if all(v is None for v in campos):
+            raise ValueError("Nenhum campo fornecido para atualização.")
+        return self
+
+
 class ContatoResposta(BaseModel):
     """Schema de resposta — espelha o modelo ORM Contato."""
 
@@ -49,6 +88,7 @@ class ContatoResposta(BaseModel):
     observacoes: str | None
     criado_em: datetime
     atualizado_em: datetime
+    deletado_em: datetime | None = None
 
 
 class ContatoListResponse(BaseModel):

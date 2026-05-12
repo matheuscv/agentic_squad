@@ -1,6 +1,6 @@
 ---
 name: po-agent
-description: Product Owner. Use para transformar a ideia bruta do usuário em um PRD (Product Requirements Document) bem estruturado, salvo em docs/PRD.md. Após criar o PRD, cria uma história no Jira via MCP da Atlassian com o mesmo conteúdo.
+description: Product Owner. Use para transformar a ideia bruta do usuário em um PRD (Product Requirements Document) bem estruturado, salvo em docs/PRD.md. Após criar o PRD, cria uma história no Jira via MCP da Atlassian no projeto mcv_team, posicionando-a no backlog.
 tools: Read, Write, Edit, mcp__atlassian__jira_create_issue, mcp__atlassian__jira_get_projects
 ---
 
@@ -19,10 +19,14 @@ requisitos **PRD.md** completo, claro e acionável.
    você é autônomo)
 3. Crie o arquivo `docs/PRD.md` com a estrutura abaixo
 4. Após gravar o arquivo, crie uma história no Jira seguindo os passos:
-   a. Use `mcp__atlassian__jira_get_projects` para listar os projetos disponíveis
-      e escolha o mais adequado ao contexto (ou o primeiro disponível)
+   a. Use `mcp__atlassian__jira_get_projects` para listar os projetos disponíveis.
+      Localize o projeto cujo nome ou chave corresponda a `mcv_team` (ou `MCV`).
+      Se não encontrar correspondência exata, escolha o projeto mais próximo e
+      registre a escolha no retorno final.
    b. Use `mcp__atlassian__jira_create_issue` para criar uma história (type: "Story")
-      com os campos abaixo:
+      com os campos abaixo. **NÃO inclua** os campos `sprint` nem
+      `customfield_10020` — a ausência de sprint garante que a issue seja criada
+      diretamente no Backlog do projeto:
       - **summary**: título do projeto extraído do PRD (ex: "PRD — <Nome do Projeto>")
       - **description**: conteúdo completo do PRD em formato de texto (use o formato
         Atlassian Document Format — ADF — com um bloco `paragraph` para cada seção)

@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
+import { Pencil, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import { Contato } from '../types'
 
 interface ContatoTableProps {
@@ -10,19 +11,26 @@ interface ContatoTableProps {
   onEditar: (id: number) => void
   onExcluir: (id: number) => void
   loading: boolean
-  // Props de paginação (adicionadas na TASK-04)
+  // Props de paginação
   paginaAtual: number
   totalRegistros: number
   limite: number
   onPaginaAnterior: () => void
   onProximaPagina: () => void
+  // Props de estado contextual da lista vazia (TASK-04); opcionais com fallback ''
+  termoBusca?: string
+  userRole?: string
+  // Props de ordenação (TASK-05)
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  onSort?: (coluna: string) => void
 }
 
-// Skeleton de linha para estado de carregamento
+// Skeleton de linha para estado de carregamento (6 colunas: Nome, E-mail, Empresa, Data, Telefone, Ações)
 function SkeletonRow() {
   return (
     <tr>
-      {[...Array(5)].map((_, i) => (
+      {[...Array(6)].map((_, i) => (
         <td key={i} className="px-4 py-3">
           <div className="h-4 bg-gray-200 rounded animate-pulse" />
         </td>
@@ -42,8 +50,28 @@ export default function ContatoTable({
   limite,
   onPaginaAnterior,
   onProximaPagina,
+  termoBusca = '',
+  userRole = '',
+  sortBy = 'nome',
+  sortOrder = 'asc',
+  onSort,
 }: ContatoTableProps) {
   const router = useRouter()
+
+  // Mapeamento label → campo sort_by aceito pelo backend
+  const sortableColumns: { label: string; field: string }[] = [
+    { label: 'Nome', field: 'nome' },
+    { label: 'E-mail', field: 'email' },
+    { label: 'Empresa', field: 'empresa' },
+    { label: 'Data', field: 'criado_em' },
+  ]
+
+  // Retorna o ícone correto para o header de uma coluna ordenável
+  function SortIcon({ field }: { field: string }) {
+    if (field !== sortBy) return <ArrowUpDown size={14} className="inline ml-1 text-gray-400" />
+    if (sortOrder === 'asc') return <ArrowUp size={14} className="inline ml-1 text-blue-500" />
+    return <ArrowDown size={14} className="inline ml-1 text-blue-500" />
+  }
 
   // Cálculos de paginação
   const totalPaginas = Math.ceil(totalRegistros / limite)
@@ -56,14 +84,35 @@ export default function ContatoTable({
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {['Nome', 'E-mail', 'Telefone', 'Empresa', 'Ações'].map((col) => (
+            {/* Colunas ordenáveis: Nome, E-mail, Empresa, Data */}
+            {sortableColumns.map(({ label, field }) => (
               <th
-                key={col}
+                key={field}
                 className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
               >
-                {col}
+                {onSort ? (
+                  <button
+                    type="button"
+                    onClick={() => onSort(field)}
+                    className="flex items-center gap-0.5 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded transition-colors"
+                    aria-label={`Ordenar por ${label}`}
+                  >
+                    {label}
+                    <SortIcon field={field} />
+                  </button>
+                ) : (
+                  label
+                )}
               </th>
             ))}
+            {/* Coluna Telefone — não ordenável */}
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Telefone
+            </th>
+            {/* Coluna Ações — não ordenável */}
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Ações
+            </th>
           </tr>
         </thead>
 
@@ -72,14 +121,33 @@ export default function ContatoTable({
           {loading &&
             [...Array(5)].map((_, i) => <SkeletonRow key={i} />)}
 
-          {/* Lista vazia */}
+          {/* Lista vazia — mensagem contextual dependendo do estado de busca */}
           {!loading && contatos.length === 0 && (
             <tr>
               <td
-                colSpan={5}
-                className="px-4 py-8 text-center text-gray-400 italic"
+                colSpan={6}
+                className="px-4 py-8 text-center text-gray-400"
               >
-                Nenhum contato encontrado.
+                {termoBusca.trim() !== '' ? (
+                  // Busca ativa sem resultados: exibe o termo pesquisado
+                  <span className="italic">
+                    Nenhum resultado para &ldquo;{termoBusca}&rdquo;.
+                  </span>
+                ) : (
+                  // Banco vazio sem filtro: mensagem genérica + atalho para adm
+                  <div className="flex flex-col items-center gap-3">
+                    <span className="italic">Nenhum contato cadastrado ainda.</span>
+                    {userRole === 'adm' && (
+                      // Botão visível apenas para administradores
+                      <a
+                        href="/contatos/novo"
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                      >
+                        Cadastrar primeiro contato
+                      </a>
+                    )}
+                  </div>
+                )}
               </td>
             </tr>
           )}
@@ -97,10 +165,14 @@ export default function ContatoTable({
                 </td>
                 <td className="px-4 py-3 text-gray-700">{contato.email}</td>
                 <td className="px-4 py-3 text-gray-600">
-                  {contato.telefone ?? '—'}
+                  {contato.empresa ?? '—'}
+                </td>
+                {/* Coluna Data: exibe criado_em formatado (pt-BR) */}
+                <td className="px-4 py-3 text-gray-600">
+                  {new Date(contato.criado_em).toLocaleDateString('pt-BR')}
                 </td>
                 <td className="px-4 py-3 text-gray-600">
-                  {contato.empresa ?? '—'}
+                  {contato.telefone ?? '—'}
                 </td>
                 <td
                   className="px-4 py-3"
@@ -111,15 +183,15 @@ export default function ContatoTable({
                     <div className="flex gap-2">
                       <button
                         onClick={() => onEditar(contato.id)}
-                        className="px-3 py-1 text-xs font-medium rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                       >
-                        Editar
+                        <Pencil size={16} aria-hidden="true" /><span>Editar</span>
                       </button>
                       <button
                         onClick={() => onExcluir(contato.id)}
-                        className="px-3 py-1 text-xs font-medium rounded border border-red-500 text-red-600 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+                        className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded border border-red-500 text-red-600 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
                       >
-                        Excluir
+                        <Trash2 size={16} aria-hidden="true" /><span>Excluir</span>
                       </button>
                     </div>
                   )}

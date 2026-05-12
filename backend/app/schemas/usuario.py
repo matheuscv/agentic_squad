@@ -1,4 +1,7 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 
 
 class UsuarioCriar(BaseModel):
@@ -10,7 +13,6 @@ class UsuarioCriar(BaseModel):
 
     # Validação de tamanho mínimo da senha via field_validator seria alternativa,
     # mas optamos por Field para manter o schema declarativo e limpo.
-    from pydantic import field_validator
 
     @field_validator("senha")
     @classmethod
@@ -29,3 +31,18 @@ class UsuarioResposta(BaseModel):
     nome: str
     email: str
     role: str
+    criado_em: datetime
+
+
+class UsuarioAtualizacao(BaseModel):
+    """Schema para atualização parcial de nome e/ou email (PUT)."""
+
+    nome: str | None = None
+    email: EmailStr | None = None  # EmailStr valida formato quando fornecido
+
+
+class RoleAtualizacao(BaseModel):
+    """Schema para alteração de role via PATCH /usuarios/{id}/role."""
+
+    # Literal restringe os valores aceitos; qualquer outro valor gera erro 422 automático.
+    role: Literal["default", "adm"]

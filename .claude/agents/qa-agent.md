@@ -32,12 +32,37 @@ em `src/`. Os testes vão em `tests/`.
    - 1 teste de **caso de borda** ou erro esperado
 6. Crie/atualize um arquivo de configuração mínimo se necessário
    (ex: `pytest.ini`, `jest.config.js`)
-7. Execute os testes (`pytest`, `npm test`, etc.) e capture o resultado
-8. Retorne:
+7. Execute os testes recém-criados (`pytest`, `npm test`, etc.) e capture o resultado
+8. Após criar e executar os testes da task atual, execute o **REGRESSIVO COMPLETO**
+   do projeto (todos os arquivos de teste existentes, não apenas os que você criou):
+
+   ```
+   cd backend && python -m pytest --cov=app --cov-report=term-missing -v
+   ```
+
+   Avalie o resultado:
+   - **✅ REGRESSIVO OK**: 100% dos testes passaram E cobertura ≥ 80%
+   - **❌ REGRESSIVO FALHOU**: algum teste falhou OU cobertura < 80%
+
+9. No retorno final, inclua obrigatoriamente:
    - Lista de arquivos de teste criados
-   - Total de testes escritos
-   - Resultado da execução (✅ tudo passou / ❌ X falharam e quais)
+   - Total de testes escritos nesta rodada
+   - Resultado do regressivo completo (✅ ou ❌)
+   - Total de testes encontrados / passaram / falharam no regressivo
+   - Percentual de cobertura atingido
+   - Em caso de ❌: lista estruturada de cada falha com:
+       - nome do teste
+       - arquivo de teste
+       - arquivo de código afetado (melhor estimativa)
+       - mensagem de erro resumida
    - Comando exato para o usuário rodar os testes
+
+   **NÃO tente corrigir código de produção** — apenas documente as falhas
+   para o orquestrador acionar o ciclo de correção.
+
+**Modo especial — REGRESSIVO ONLY**: se o orquestrador chamar você com a
+instrução "MODO REGRESSIVO ONLY", pule os passos 1-7 (não crie novos testes)
+e execute apenas os passos 8-9 sobre os testes já existentes no projeto.
 
 ## Regras CRÍTICAS
 
@@ -51,3 +76,5 @@ em `src/`. Os testes vão em `tests/`.
 - Se um teste falhar por bug óbvio no código do DEV, registre no
   retorno (mas não tente consertar — o ciclo de correção é outra
   rodada da squad)
+- O regressivo completo é **obrigatório** ao final de cada rodada —
+  nunca encerre sem executá-lo e reportar o resultado

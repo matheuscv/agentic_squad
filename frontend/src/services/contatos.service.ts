@@ -12,16 +12,20 @@ export interface ContatosPageResponse {
 }
 
 /**
- * Lista contatos com suporte a paginação e busca.
+ * Lista contatos com suporte a paginação, busca e ordenação.
  * - `busca`: filtra por nome, e-mail ou empresa (LIKE case-insensitive no backend)
  * - `skip`: quantos registros pular (offset)
  * - `limit`: quantos registros retornar
+ * - `sort_by`: campo de ordenação (nome, email, empresa, criado_em)
+ * - `sort_order`: direção de ordenação (asc | desc)
  * O backend retorna `{ items: [...], total: N }`.
  */
 export async function listarContatos(
   busca?: string,
   skip?: number,
-  limit?: number
+  limit?: number,
+  sort_by?: string,
+  sort_order?: 'asc' | 'desc'
 ): Promise<ContatosPageResponse> {
   const params: Record<string, string | number> = {}
   if (busca && busca.trim() !== '') {
@@ -30,6 +34,9 @@ export async function listarContatos(
   // Inclui skip/limit apenas quando explicitamente fornecidos
   if (skip !== undefined) params.skip = skip
   if (limit !== undefined) params.limit = limit
+  // Inclui ordenação apenas quando fornecida
+  if (sort_by) params.sort_by = sort_by
+  if (sort_order) params.sort_order = sort_order
 
   const response = await api.get<ContatosPageResponse>('/contatos/', { params })
   return response.data

@@ -21,7 +21,9 @@ const LIMITE = 20
 // ------------------------------------------------------------------
 function ContatosPageContent() {
   const router = useRouter()
-  const { isAdm } = useAuth()
+  const { isAdm, usuario } = useAuth()
+  // userRole: string derivado do objeto usuario para repasse ao ContatoTable
+  const userRole = usuario?.role ?? ''
 
   // Estado principal
   const [contatos, setContatos] = useState<Contato[]>([])
@@ -36,6 +38,10 @@ function ContatosPageContent() {
   const [paginaAtual, setPaginaAtual] = useState(1)
   const [totalRegistros, setTotalRegistros] = useState(0)
 
+  // Ordenação (TASK-05)
+  const [sortBy, setSortBy] = useState<string>('nome')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+
   // Modal de exclusão
   const [modalAberto, setModalAberto] = useState(false)
   const [contatoParaExcluir, setContatoParaExcluir] = useState<number | null>(null)
@@ -46,12 +52,12 @@ function ContatosPageContent() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ------------------------------------------------------------------
-  // Carregamento inicial e ao mudar de página
+  // Carregamento inicial e ao mudar de página ou ordenação
   // ------------------------------------------------------------------
   useEffect(() => {
-    carregarContatos(busca, paginaAtual)
+    carregarContatos(busca, paginaAtual, sortBy, sortOrder)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paginaAtual])
+  }, [paginaAtual, sortBy, sortOrder])
 
   // Limpa timers ao desmontar para evitar memory leaks
   useEffect(() => {
@@ -61,12 +67,17 @@ function ContatosPageContent() {
     }
   }, [])
 
-  async function carregarContatos(termo?: string, pagina: number = 1) {
+  async function carregarContatos(
+    termo?: string,
+    pagina: number = 1,
+    ordenarPor: string = 'nome',
+    ordemDirecao: 'asc' | 'desc' = 'asc'
+  ) {
     setLoading(true)
     setErro(null)
     try {
       const skip = (pagina - 1) * LIMITE
-      const resposta = await listarContatos(termo, skip, LIMITE)
+      const resposta = await listarContatos(termo, skip, LIMITE, ordenarPor, ordemDirecao)
       // O backend retorna { items, total } após TASK-01
       setContatos(resposta.items)
       setTotalRegistros(resposta.total)
@@ -89,9 +100,11 @@ function ContatosPageContent() {
       if (debounceRef.current) clearTimeout(debounceRef.current)
 
       debounceRef.current = setTimeout(() => {
-        // Ao mudar o filtro, volta para a primeira página e carrega
+        // Ao mudar o filtro, reseta página e ordenação, depois carrega
         setPaginaAtual(1)
-        carregarContatos(valor, 1)
+        setSortBy('nome')
+        setSortOrder('asc')
+        carregarContatos(valor, 1, 'nome', 'asc')
       }, 400)
     },
     []
@@ -107,6 +120,31 @@ function ContatosPageContent() {
   function handleProximaPagina() {
     const totalPaginas = Math.ceil(totalRegistros / LIMITE)
     setPaginaAtual((p) => Math.min(totalPaginas, p + 1))
+  }
+
+  // ------------------------------------------------------------------
+  // Ordenação de colunas (TASK-05)
+  // Ciclo: inativa → ASC → DESC → volta ao padrão nome ASC
+  // ------------------------------------------------------------------
+  function handleSort(coluna: string) {
+    let novaSortBy = coluna
+    let novaSortOrder: 'asc' | 'desc' = 'asc'
+
+    if (coluna === sortBy) {
+      if (sortOrder === 'asc') {
+        // Segunda vez na mesma coluna: vai para DESC
+        novaSortOrder = 'desc'
+      } else {
+        // Terceira vez: reseta para o padrão
+        novaSortBy = 'nome'
+        novaSortOrder = 'asc'
+      }
+    }
+    // Sempre volta para a primeira página ao mudar ordenação
+    setPaginaAtual(1)
+    setSortBy(novaSortBy)
+    setSortOrder(novaSortOrder)
+    // Disparo direto: o useEffect reagirá às mudanças de estado
   }
 
   // ------------------------------------------------------------------
@@ -209,6 +247,11 @@ function ContatosPageContent() {
         limite={LIMITE}
         onPaginaAnterior={handlePaginaAnterior}
         onProximaPagina={handleProximaPagina}
+        termoBusca={busca}
+        userRole={userRole}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={handleSort}
       />
 
       {/* Modal de confirmação de exclusão */}

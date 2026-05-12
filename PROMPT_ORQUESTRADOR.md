@@ -26,21 +26,20 @@ IDEIA DO USUÁRIO (substitua entre as aspas antes de rodar):
 Agora precisaremos evoluir este projeto com algumas melhorias e novas funcionalidades. O plano será 
 feito em fases, e abaixo segue o escopo a ser considerado para a fase atual.
 
-Fase 1 — Correções imediatas
+Fase 3.1 — Qualidade e segurança
 
-1.1 Integrar Navbar no layout
-Navbar.tsx existe e está pronto, mas frontend/src/app/layout.tsx não a inclui (TODO TASK-07 não 
-concluído). Sem ela, o usuário não tem como navegar ou fazer logout pela UI. Solução: descomentar 
-<Navbar /> em layout.tsx.
+3.1 Cobertura de testes ≥ 80%
+Fixtures em backend/tests/conftest.py estão prontas. Implementar os 22 testes planejados em test_auth.py, 
+test_usuarios.py, test_contatos.py e test_services.py.
 
-1.2 Paginação na lista de contatos
-Backend limita a 200 registros sem offset/limit; frontend carrega tudo de uma vez.
-Backend: adicionar skip: int = 0, limit: int = 20 em GET /contatos/, retornar total no response.
-Frontend: controles "Anterior / Próxima" em ContatoTable.
+3.2 PATCH (atualização parcial) em contatos
+Endpoint atual PUT /contatos/{id} exige todos os campos. Adicionar PATCH /contatos/{id} com campos 
+opcionais via Pydantic Optional fields.
 
-1.3 Toast diferenciado para erro vs sucesso
-Mensagem de erro aparece com o mesmo estilo visual de sucesso (verde). Adicionar tipo 
-'sucesso' | 'erro' ao estado de toast em frontend/src/app/contatos/page.tsx.
+3.3 Soft delete de contatos
+Adicionar campo deletado_em: datetime | None no modelo Contato. DELETE /contatos/{id} passa a setar 
+deletado_em em vez de apagar fisicamente. Endpoint GET /contatos/lixeira para admins.
+
 
 ═══════════════════════════════════════════════════════════════════
 FLUXO DE EXECUÇÃO (siga RIGOROSAMENTE nesta ordem):
@@ -76,12 +75,33 @@ FASE 3 — Desenvolvimento (DEVs)
   → Output esperado: código-fonte implementado no diretório `src/`
   → Valide: os arquivos prometidos pela task existem
 
-FASE 4 — Quality Assurance
+FASE 4 — Quality Assurance (com regressivo automático)
   → Delegue para o subagent `qa-agent`
   → Input: lista dos arquivos implementados pelos DEVs em `src/`
-  → Output esperado: testes unitários em `tests/` cobrindo cada
-    arquivo implementado
-  → Valide: arquivos de teste existem e seguem o padrão da stack
+  → Output esperado:
+      1. Testes unitários em `tests/` cobrindo cada arquivo implementado
+      2. Resultado do regressivo completo (TODOS os testes do projeto):
+         ✅ REGRESSIVO OK (100% pass + cobertura ≥ 80%)
+         ❌ REGRESSIVO FALHOU (lista estruturada de falhas)
+  → Valide e aja conforme o resultado:
+
+  SE ✅ REGRESSIVO OK:
+    • Prossiga para o Relatório Final
+
+  SE ❌ REGRESSIVO FALHOU:
+    a. Registre no log quais testes falharam e quais arquivos estão afetados
+    b. PEÇA PERMISSÃO ao usuário para acionar um dev-agent de correção,
+       informando resumidamente quais falhas foram encontradas
+    c. Após aprovação, delegue ao `dev-agent` com:
+       - A lista completa de testes que falharam
+       - Os arquivos de código que precisam de correção
+       - Instrução: "corrija APENAS os bugs que causam falha nos testes
+         listados; não adicione features nem altere testes"
+    d. Após o dev-agent concluir, delegue novamente ao `qa-agent` com:
+       - Instrução: "MODO REGRESSIVO ONLY — execute apenas o regressivo
+         completo, não crie novos testes"
+    e. Repita os passos b-d até obter ✅ REGRESSIVO OK
+    f. Somente conclua a FASE 4 quando o regressivo estiver 100% verde
 
 ═══════════════════════════════════════════════════════════════════
 RELATÓRIO FINAL

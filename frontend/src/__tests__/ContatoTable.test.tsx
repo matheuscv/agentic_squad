@@ -194,9 +194,22 @@ describe('ContatoTable — contador de registros', () => {
 // ---------------------------------------------------------------------------
 
 describe('ContatoTable — estados especiais', () => {
-  test('exibe mensagem "Nenhum contato encontrado." quando lista vazia e não carregando', () => {
-    render(<ContatoTable {...makeProps({ contatos: [], loading: false, totalRegistros: 0 })} />)
-    expect(screen.getByText(/nenhum contato encontrado/i)).toBeInTheDocument()
+  test('exibe mensagem "Nenhum contato cadastrado ainda." quando banco vazio sem busca', () => {
+    render(
+      <ContatoTable
+        {...makeProps({ contatos: [], loading: false, totalRegistros: 0, termoBusca: '' })}
+      />
+    )
+    expect(screen.getByText(/nenhum contato cadastrado ainda/i)).toBeInTheDocument()
+  })
+
+  test('NÃO exibe string genérica "Nenhum contato encontrado" (removida na Fase 2)', () => {
+    render(
+      <ContatoTable
+        {...makeProps({ contatos: [], loading: false, totalRegistros: 0, termoBusca: '' })}
+      />
+    )
+    expect(screen.queryByText(/nenhum contato encontrado/i)).not.toBeInTheDocument()
   })
 
   test('não exibe dados enquanto loading=true', () => {
@@ -242,5 +255,240 @@ describe('ContatoTable — controle de acesso (isAdm)', () => {
     )
     expect(screen.queryByRole('button', { name: /editar/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /excluir/i })).not.toBeInTheDocument()
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// RF-F2-04 — Ícones nos botões (Pencil e Trash2 via lucide-react)
+// ---------------------------------------------------------------------------
+
+describe('ContatoTable — ícones nos botões de ação (RF-F2-04)', () => {
+  const contatos = [makeContato(1)]
+
+  test('botão Editar contém ícone com aria-hidden="true"', () => {
+    render(
+      <ContatoTable
+        {...makeProps({ contatos, isAdm: true, paginaAtual: 1, totalRegistros: 1, limite: 20 })}
+      />
+    )
+    const btnEditar = screen.getByRole('button', { name: /editar/i })
+    // O ícone svg dentro do botão deve ter aria-hidden
+    const svg = btnEditar.querySelector('svg')
+    expect(svg).not.toBeNull()
+    expect(svg).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  test('botão Excluir contém ícone com aria-hidden="true"', () => {
+    render(
+      <ContatoTable
+        {...makeProps({ contatos, isAdm: true, paginaAtual: 1, totalRegistros: 1, limite: 20 })}
+      />
+    )
+    const btnExcluir = screen.getByRole('button', { name: /excluir/i })
+    const svg = btnExcluir.querySelector('svg')
+    expect(svg).not.toBeNull()
+    expect(svg).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  test('texto "Editar" permanece visível (não está oculto via sr-only)', () => {
+    render(
+      <ContatoTable
+        {...makeProps({ contatos, isAdm: true, paginaAtual: 1, totalRegistros: 1, limite: 20 })}
+      />
+    )
+    const btnEditar = screen.getByRole('button', { name: /editar/i })
+    const span = btnEditar.querySelector('span')
+    expect(span).not.toBeNull()
+    expect(span?.textContent).toMatch(/editar/i)
+    // Classe sr-only oculta o texto — não deve estar presente
+    expect(span?.className).not.toMatch(/sr-only/)
+  })
+
+  test('texto "Excluir" permanece visível (não está oculto via sr-only)', () => {
+    render(
+      <ContatoTable
+        {...makeProps({ contatos, isAdm: true, paginaAtual: 1, totalRegistros: 1, limite: 20 })}
+      />
+    )
+    const btnExcluir = screen.getByRole('button', { name: /excluir/i })
+    const span = btnExcluir.querySelector('span')
+    expect(span).not.toBeNull()
+    expect(span?.textContent).toMatch(/excluir/i)
+    expect(span?.className).not.toMatch(/sr-only/)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// RF-F2-05 — Mensagem contextual de lista vazia
+// ---------------------------------------------------------------------------
+
+describe('ContatoTable — mensagem contextual de lista vazia (RF-F2-05)', () => {
+  test('com termoBusca preenchido exibe mensagem com o termo entre aspas', () => {
+    render(
+      <ContatoTable
+        {...makeProps({
+          contatos: [],
+          loading: false,
+          totalRegistros: 0,
+          termoBusca: 'fulano',
+        })}
+      />
+    )
+    expect(screen.getByText(/nenhum resultado para/i)).toBeInTheDocument()
+    expect(screen.getByText(/fulano/i)).toBeInTheDocument()
+  })
+
+  test('mensagem com busca ativa NÃO exibe "Nenhum contato cadastrado ainda."', () => {
+    render(
+      <ContatoTable
+        {...makeProps({
+          contatos: [],
+          loading: false,
+          totalRegistros: 0,
+          termoBusca: 'xyz',
+        })}
+      />
+    )
+    expect(screen.queryByText(/nenhum contato cadastrado ainda/i)).not.toBeInTheDocument()
+  })
+
+  test('sem busca e sem dados exibe "Nenhum contato cadastrado ainda."', () => {
+    render(
+      <ContatoTable
+        {...makeProps({
+          contatos: [],
+          loading: false,
+          totalRegistros: 0,
+          termoBusca: '',
+        })}
+      />
+    )
+    expect(screen.getByText(/nenhum contato cadastrado ainda/i)).toBeInTheDocument()
+  })
+
+  test('sem busca e sem dados, adm vê link "Cadastrar primeiro contato"', () => {
+    render(
+      <ContatoTable
+        {...makeProps({
+          contatos: [],
+          loading: false,
+          totalRegistros: 0,
+          termoBusca: '',
+          userRole: 'adm',
+        })}
+      />
+    )
+    expect(screen.getByText(/cadastrar primeiro contato/i)).toBeInTheDocument()
+  })
+
+  test('sem busca e sem dados, usuário default NÃO vê link "Cadastrar primeiro contato"', () => {
+    render(
+      <ContatoTable
+        {...makeProps({
+          contatos: [],
+          loading: false,
+          totalRegistros: 0,
+          termoBusca: '',
+          userRole: 'default',
+        })}
+      />
+    )
+    expect(screen.queryByText(/cadastrar primeiro contato/i)).not.toBeInTheDocument()
+  })
+
+  test('termoBusca com apenas espaços é tratado como busca vazia', () => {
+    // trim() !== '' → false para '   ', então exibe mensagem de banco vazio
+    render(
+      <ContatoTable
+        {...makeProps({
+          contatos: [],
+          loading: false,
+          totalRegistros: 0,
+          termoBusca: '   ',
+        })}
+      />
+    )
+    expect(screen.getByText(/nenhum contato cadastrado ainda/i)).toBeInTheDocument()
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// RF-F2-01 — Headers ordenáveis
+// ---------------------------------------------------------------------------
+
+describe('ContatoTable — headers ordenáveis (RF-F2-01)', () => {
+  test('quando onSort é passado, headers Nome/Email/Empresa/Data são botões', () => {
+    const onSort = jest.fn()
+    render(
+      <ContatoTable
+        {...makeProps({ onSort })}
+      />
+    )
+    // Cada coluna ordenável deve ter um botão com aria-label
+    expect(screen.getByRole('button', { name: /ordenar por nome/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ordenar por e-mail/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ordenar por empresa/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ordenar por data/i })).toBeInTheDocument()
+  })
+
+  test('quando onSort é undefined, headers são texto simples (sem botão)', () => {
+    render(
+      <ContatoTable
+        {...makeProps({ onSort: undefined })}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /ordenar por nome/i })).not.toBeInTheDocument()
+  })
+
+  test('clicar no header Nome chama onSort("nome")', async () => {
+    const user = userEvent.setup()
+    const onSort = jest.fn()
+    render(
+      <ContatoTable {...makeProps({ onSort })} />
+    )
+    await user.click(screen.getByRole('button', { name: /ordenar por nome/i }))
+    expect(onSort).toHaveBeenCalledWith('nome')
+  })
+
+  test('clicar no header Empresa chama onSort("empresa")', async () => {
+    const user = userEvent.setup()
+    const onSort = jest.fn()
+    render(
+      <ContatoTable {...makeProps({ onSort })} />
+    )
+    await user.click(screen.getByRole('button', { name: /ordenar por empresa/i }))
+    expect(onSort).toHaveBeenCalledWith('empresa')
+  })
+
+  test('coluna ativa com sortOrder=asc exibe ícone ArrowUp (svg distinto)', () => {
+    const onSort = jest.fn()
+    render(
+      <ContatoTable {...makeProps({ onSort, sortBy: 'nome', sortOrder: 'asc' })} />
+    )
+    // O botão "Ordenar por Nome" deve ter um ícone — verificamos pela presença do svg
+    const btnNome = screen.getByRole('button', { name: /ordenar por nome/i })
+    expect(btnNome.querySelector('svg')).not.toBeNull()
+  })
+
+  test('coluna ativa com sortOrder=desc exibe ícone distinto', () => {
+    const onSort = jest.fn()
+    render(
+      <ContatoTable {...makeProps({ onSort, sortBy: 'nome', sortOrder: 'desc' })} />
+    )
+    const btnNome = screen.getByRole('button', { name: /ordenar por nome/i })
+    expect(btnNome.querySelector('svg')).not.toBeNull()
+  })
+
+  test('coluna inativa exibe ícone neutro ArrowUpDown', () => {
+    const onSort = jest.fn()
+    render(
+      // sortBy=nome → empresa está inativa
+      <ContatoTable {...makeProps({ onSort, sortBy: 'nome', sortOrder: 'asc' })} />
+    )
+    const btnEmpresa = screen.getByRole('button', { name: /ordenar por empresa/i })
+    expect(btnEmpresa.querySelector('svg')).not.toBeNull()
   })
 })

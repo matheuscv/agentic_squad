@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.contato import Contato
-from app.schemas.contato import ContatoCriar, ContatoAtualizar
+from app.schemas.contato import ContatoCriar, ContatoAtualizar, ContatoPatch
 
 
 def listar_contatos(
@@ -15,17 +15,33 @@ def listar_contatos(
     busca: str | None = None,
     skip: int = 0,
     limit: int = 20,
+    sort_by: str = "nome",
+    sort_order: str = "asc",
 ) -> tuple[list[Contato], int]:
-    """Retorna uma tupla (items, total) com paginação.
+    """Retorna uma tupla (items, total) com paginação e ordenação.
 
-    - items: registros da página, aplicando OFFSET skip LIMIT limit
+    - items: registros da página, aplicando ORDER BY, OFFSET skip, LIMIT limit
     - total: contagem total de registros que atendem ao filtro de busca
 
     Se `busca` for fornecido, filtra com LIKE case-insensitive (ilike) nos
     campos nome, email e empresa (OR entre eles).
+
+    Parâmetros de ordenação (validados no router antes de chegar aqui):
+    - sort_by: nome da coluna — "nome", "email", "empresa", "criado_em"
+    - sort_order: "asc" ou "desc"
     """
-    # Predicado de filtro reutilizado tanto no COUNT quanto na consulta paginada
-    stmt_base = select(Contato)
+    # Mapeamento explícito de nomes de campo para colunas SQLAlchemy.
+    # Usar dicionário fechado evita SQL injection por substituição de coluna.
+    colunas_ordenacao = {
+        "nome": Contato.nome,
+        "email": Contato.email,
+        "empresa": Contato.empresa,
+        "criado_em": Contato.criado_em,
+    }
+
+    # Predicado de filtro reutilizado tanto no COUNT quanto na consulta paginada.
+    # Registros com soft delete (deletado_em IS NOT NULL) são excluídos da listagem normal.
+    stmt_base = select(Contato).where(Contato.deletado_em == None)  # noqa: E711
 
     if busca:
         termo = f"%{busca}%"
@@ -40,16 +56,24 @@ def listar_contatos(
     stmt_count = select(func.count()).select_from(stmt_base.subquery())
     total: int = db.execute(stmt_count).scalar_one()
 
-    # Consulta paginada
-    stmt_paginada = stmt_base.offset(skip).limit(limit)
+    # Ordenação no banco (RN-F2-01) — aplicada antes do offset/limit
+    coluna = colunas_ordenacao[sort_by]
+    ordem = coluna.asc() if sort_order == "asc" else coluna.desc()
+
+    # Consulta paginada com ordenação
+    stmt_paginada = stmt_base.order_by(ordem).offset(skip).limit(limit)
     items = list(db.execute(stmt_paginada).scalars().all())
 
     return items, total
 
 
 def buscar_contato(db: Session, id: int) -> Contato:
-    """Retorna o Contato pelo id ou levanta HTTPException 404."""
-    stmt = select(Contato).where(Contato.id == id)
+    """Retorna o Contato ativo (não deletado) pelo id ou levanta HTTPException 404.
+
+    Contatos com deletado_em preenchido são tratados como inexistentes para o
+    fluxo normal — retornam 404 tal como registros que nunca existiram.
+    """
+    stmt = select(Contato).where(Contato.id == id, Contato.deletado_em == None)  # noqa: E711
     contato = db.execute(stmt).scalar_one_or_none()
     if contato is None:
         raise HTTPException(status_code=404, detail="Contato não encontrado")
@@ -105,11 +129,70 @@ def atualizar_contato(db: Session, id: int, dados: ContatoAtualizar) -> Contato:
     return contato
 
 
-def excluir_contato(db: Session, id: int) -> None:
-    """Exclui o contato pelo id.
+def patch_contato(db: Session, id: int, dados: ContatoPatch) -> Contato:
+    """Atualiza parcialmente um contato — apenas os campos não-None do schema.
 
     Levanta HTTPException 404 se o contato não existir.
+    Levanta HTTPException 400 se o novo e-mail já pertencer a outro contato.
     """
     contato = buscar_contato(db, id)
-    db.delete(contato)
+
+    # Valida unicidade de e-mail antes de aplicar qualquer mudança
+    if dados.email is not None:
+        conflito = db.execute(
+            select(Contato).where(
+                Contato.email == dados.email,
+                Contato.id != id,  # exclui o próprio registro da verificação
+            )
+        ).scalar_one_or_none()
+        if conflito is not None:
+            raise HTTPException(status_code=400, detail="E-mail já cadastrado por outro contato")
+
+    # Aplica somente os campos presentes no body (não-None)
+    campos_atualizaveis = ("nome", "email", "telefone", "empresa", "observacoes")
+    for campo in campos_atualizaveis:
+        valor = getattr(dados, campo)
+        if valor is not None:
+            setattr(contato, campo, valor)
+
+    contato.atualizado_em = datetime.now(timezone.utc)
+
     db.commit()
+    db.refresh(contato)
+    return contato
+
+
+def excluir_contato(db: Session, id: int) -> None:
+    """Soft delete: marca deletado_em com o instante atual (UTC) em vez de remover a linha.
+
+    Levanta HTTPException 404 se o contato não existir (ou já estiver deletado).
+    """
+    contato = buscar_contato(db, id)
+    contato.deletado_em = datetime.now(timezone.utc)
+    db.commit()
+
+
+def listar_lixeira(
+    db: Session,
+    skip: int = 0,
+    limit: int = 20,
+) -> tuple[list[Contato], int]:
+    """Retorna contatos que passaram por soft delete (deletado_em IS NOT NULL).
+
+    - Ordenados por deletado_em DESC (mais recentes primeiro).
+    - Retorna tupla (items, total) no mesmo padrão de listar_contatos.
+    - Exclusivo para administradores (o controle de acesso é feito no router).
+    """
+    stmt_base = select(Contato).where(Contato.deletado_em != None)  # noqa: E711
+
+    # Contagem total de registros na lixeira
+    stmt_count = select(func.count()).select_from(stmt_base.subquery())
+    total: int = db.execute(stmt_count).scalar_one()
+
+    # Mais recentemente deletado primeiro
+    stmt_paginada = (
+        stmt_base.order_by(Contato.deletado_em.desc()).offset(skip).limit(limit)
+    )
+    items = list(db.execute(stmt_paginada).scalars().all())
+
+    return items, total

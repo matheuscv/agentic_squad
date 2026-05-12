@@ -28,3 +28,7 @@ class Contato(Base):
         # onupdate via SQLAlchemy ORM — será atualizado pelo service ao persistir
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    # Soft delete: preenchido com o instante UTC da exclusão lógica; NULL = ativo
+    deletado_em: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=None
+    )

@@ -133,10 +133,10 @@ def test_fluxo_completo_adm(client_integracao, db_integracao):
     contato_id = resp.json()["id"]
     assert resp.json()["nome"] == "Cliente Integracao"
 
-    # 4. Verificar na listagem
+    # 4. Verificar na listagem — endpoint retorna objeto paginado {items, total}
     resp = client.get("/contatos/", headers=headers)
     assert resp.status_code == 200
-    ids = [c["id"] for c in resp.json()]
+    ids = [c["id"] for c in resp.json()["items"]]
     assert contato_id in ids
 
     # 5. Editar contato
@@ -235,24 +235,24 @@ def test_fluxo_criar_e_pesquisar_contato(client_integracao, db_integracao):
     client.post("/contatos/", json={"nome": "Joana Silva", "email": "joana@alpha.com", "empresa": "AlphaCo"}, headers=headers)
     client.post("/contatos/", json={"nome": "Pedro Lima", "email": "pedro@beta.com", "empresa": "BetaCo"}, headers=headers)
 
-    # Busca por empresa
+    # Busca por empresa — endpoint retorna objeto paginado {items, total}
     resp = client.get("/contatos/", params={"busca": "AlphaCo"}, headers=headers)
     assert resp.status_code == 200
-    resultado = resp.json()
+    resultado = resp.json()["items"]
     assert len(resultado) == 1
     assert resultado[0]["empresa"] == "AlphaCo"
 
     # Busca por nome parcial
     resp = client.get("/contatos/", params={"busca": "Pedro"}, headers=headers)
     assert resp.status_code == 200
-    resultado = resp.json()
+    resultado = resp.json()["items"]
     assert len(resultado) == 1
     assert resultado[0]["nome"] == "Pedro Lima"
 
     # Busca sem resultados
     resp = client.get("/contatos/", params={"busca": "TermoInexistente"}, headers=headers)
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.json()["items"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +376,7 @@ def test_fluxo_busca_case_insensitive(client_integracao, db_integracao):
 
     resp = client.get("/contatos/", params={"busca": "ZELIA"}, headers=headers)
     assert resp.status_code == 200
-    resultado = resp.json()
+    # endpoint retorna objeto paginado {items, total}
+    resultado = resp.json()["items"]
     assert len(resultado) == 1
     assert resultado[0]["nome"] == "zelia moura"
