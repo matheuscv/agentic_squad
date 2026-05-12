@@ -178,3 +178,25 @@ def contato_exemplo(db_session):
         observacoes="Observação de teste",
     )
     return contato_service.criar_contato(db_session, dados)
+
+
+# ---------------------------------------------------------------------------
+# Isolamento do rate limiter entre testes
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def reset_limiter():
+    """
+    Reseta o storage interno do slowapi antes de cada teste.
+    Evita que testes de autenticação falhem com HTTP 429 devido ao acúmulo
+    de requisições de testes anteriores no mesmo processo.
+    """
+    from app.limiter import limiter
+
+    # O storage padrão do slowapi é um MemoryStorage com método reset()
+    # Se o storage não tiver reset (ex.: Redis), este bloco é seguro por ignorar o erro.
+    try:
+        limiter._storage.reset()
+    except Exception:
+        pass
+    yield

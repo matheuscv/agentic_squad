@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, DateTime
+from sqlalchemy import String, Text, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -31,4 +31,13 @@ class Contato(Base):
     # Soft delete: preenchido com o instante UTC da exclusão lógica; NULL = ativo
     deletado_em: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, default=None
+    )
+    # Auditoria RF-F3.2-01: rastreia quem criou/modificou o registro.
+    # ON DELETE SET NULL: se o usuário for removido, o campo fica NULL (sem orfanizar o contato).
+    # Nota: SQLite ignora FK constraints por padrão; nullable garante compatibilidade retroativa.
+    criado_por_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, default=None
+    )
+    atualizado_por_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, default=None
     )

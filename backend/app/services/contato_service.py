@@ -80,10 +80,13 @@ def buscar_contato(db: Session, id: int) -> Contato:
     return contato
 
 
-def criar_contato(db: Session, dados: ContatoCriar) -> Contato:
+def criar_contato(db: Session, dados: ContatoCriar, usuario_id: int | None = None) -> Contato:
     """Persiste um novo Contato.
 
     Levanta HTTPException 400 se o e-mail já estiver cadastrado.
+
+    usuario_id (RF-F3.2-01): id do usuário autenticado que está criando o registro.
+    Preenchido em criado_por_id e atualizado_por_id. Pode ser None em contextos de teste/seed.
     """
     # Verifica duplicidade de e-mail
     existente = db.execute(
@@ -99,6 +102,8 @@ def criar_contato(db: Session, dados: ContatoCriar) -> Contato:
         telefone=dados.telefone,
         empresa=dados.empresa,
         observacoes=dados.observacoes,
+        criado_por_id=usuario_id,
+        atualizado_por_id=usuario_id,
     )
     db.add(contato)
     db.commit()
@@ -106,10 +111,14 @@ def criar_contato(db: Session, dados: ContatoCriar) -> Contato:
     return contato
 
 
-def atualizar_contato(db: Session, id: int, dados: ContatoAtualizar) -> Contato:
+def atualizar_contato(
+    db: Session, id: int, dados: ContatoAtualizar, usuario_id: int | None = None
+) -> Contato:
     """Atualiza apenas os campos não-None do schema e persiste.
 
     Levanta HTTPException 404 se o contato não existir.
+
+    usuario_id (RF-F3.2-01): atualiza atualizado_por_id sem tocar em criado_por_id (RN-F3.2-01).
     """
     contato = buscar_contato(db, id)
 
@@ -123,17 +132,24 @@ def atualizar_contato(db: Session, id: int, dados: ContatoAtualizar) -> Contato:
     # Atualiza o timestamp manualmente (o onupdate do modelo cuida disso via ORM,
     # mas é bom ser explícito para garantir o comportamento em todos os drivers)
     contato.atualizado_em = datetime.now(timezone.utc)
+    # Auditoria: registra quem fez a atualização; criado_por_id é preservado
+    if usuario_id is not None:
+        contato.atualizado_por_id = usuario_id
 
     db.commit()
     db.refresh(contato)
     return contato
 
 
-def patch_contato(db: Session, id: int, dados: ContatoPatch) -> Contato:
+def patch_contato(
+    db: Session, id: int, dados: ContatoPatch, usuario_id: int | None = None
+) -> Contato:
     """Atualiza parcialmente um contato — apenas os campos não-None do schema.
 
     Levanta HTTPException 404 se o contato não existir.
     Levanta HTTPException 400 se o novo e-mail já pertencer a outro contato.
+
+    usuario_id (RF-F3.2-01): atualiza atualizado_por_id sem tocar em criado_por_id (RN-F3.2-01).
     """
     contato = buscar_contato(db, id)
 
@@ -156,6 +172,9 @@ def patch_contato(db: Session, id: int, dados: ContatoPatch) -> Contato:
             setattr(contato, campo, valor)
 
     contato.atualizado_em = datetime.now(timezone.utc)
+    # Auditoria: registra quem fez o patch; criado_por_id é preservado
+    if usuario_id is not None:
+        contato.atualizado_por_id = usuario_id
 
     db.commit()
     db.refresh(contato)

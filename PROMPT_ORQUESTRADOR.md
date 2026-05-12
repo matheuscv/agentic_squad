@@ -26,19 +26,20 @@ IDEIA DO USUÁRIO (substitua entre as aspas antes de rodar):
 Agora precisaremos evoluir este projeto com algumas melhorias e novas funcionalidades. O plano será 
 feito em fases, e abaixo segue o escopo a ser considerado para a fase atual.
 
-Fase 3.1 — Qualidade e segurança
+Fase 3.2 — Qualidade e segurança
 
-3.1 Cobertura de testes ≥ 80%
-Fixtures em backend/tests/conftest.py estão prontas. Implementar os 22 testes planejados em test_auth.py, 
-test_usuarios.py, test_contatos.py e test_services.py.
+3.4 Auditoria básica (quem criou/modificou)
+Adicionar criado_por_id e atualizado_por_id (FK → Usuario) na tabela Contato. Popular 
+automaticamente via dependency require_adm.
 
-3.2 PATCH (atualização parcial) em contatos
-Endpoint atual PUT /contatos/{id} exige todos os campos. Adicionar PATCH /contatos/{id} com campos 
-opcionais via Pydantic Optional fields.
+3.5 Rate limiting na API
+Usar slowapi (FastAPI-compatible) para limitar POST /auth/login (ex: 5 req/min por IP) 
+e prevenir ataques de força bruta.
 
-3.3 Soft delete de contatos
-Adicionar campo deletado_em: datetime | None no modelo Contato. DELETE /contatos/{id} passa a setar 
-deletado_em em vez de apagar fisicamente. Endpoint GET /contatos/lixeira para admins.
+3.6 Validação robusta no frontend com Zod
+Substituir regex manuais por schemas Zod em todos os formulários (login, cadastro, contato). 
+Melhora mensagens de erro e type-safety.
+
 
 
 ═══════════════════════════════════════════════════════════════════

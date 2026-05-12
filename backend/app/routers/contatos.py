@@ -93,10 +93,11 @@ def obter(
 def criar(
     dados: ContatoCriar,
     db: Session = Depends(get_db),
-    _usuario=Depends(require_adm),
+    current_user=Depends(require_adm),
 ):
     """Cria um novo contato (restrito a administradores)."""
-    return contato_service.criar_contato(db, dados)
+    # Passa o id do usuário autenticado para auditoria (RF-F3.2-01)
+    return contato_service.criar_contato(db, dados, usuario_id=current_user.id)
 
 
 @router.put("/{id}", response_model=ContatoResposta)
@@ -104,10 +105,11 @@ def atualizar(
     id: int,
     dados: ContatoAtualizar,
     db: Session = Depends(get_db),
-    _usuario=Depends(require_adm),
+    current_user=Depends(require_adm),
 ):
     """Atualiza um contato (restrito a administradores)."""
-    return contato_service.atualizar_contato(db, id, dados)
+    # Passa o id do usuário autenticado para auditoria (RF-F3.2-01)
+    return contato_service.atualizar_contato(db, id, dados, usuario_id=current_user.id)
 
 
 @router.patch("/{id}", response_model=ContatoResposta)
@@ -115,10 +117,11 @@ def patch(
     id: int,
     dados: ContatoPatch,
     db: Session = Depends(get_db),
-    _usuario=Depends(require_adm),
+    current_user=Depends(require_adm),
 ):
     """Atualiza parcialmente um contato (restrito a administradores)."""
-    return contato_service.patch_contato(db, id, dados)
+    # Passa o id do usuário autenticado para auditoria (RF-F3.2-01)
+    return contato_service.patch_contato(db, id, dados, usuario_id=current_user.id)
 
 
 @router.delete("/{id}", status_code=204)

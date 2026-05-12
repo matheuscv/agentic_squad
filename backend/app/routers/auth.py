@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
+from app.limiter import limiter
 from app.schemas.auth import LoginRequest, TokenResponse
 from app.schemas.usuario import UsuarioResposta
 from app.services.auth_service import criar_token
@@ -11,7 +12,8 @@ router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(dados: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, dados: LoginRequest, db: Session = Depends(get_db)):
     """
     Autentica o usuário via e-mail e senha (JSON body).
     Retorna um JWT Bearer token em caso de sucesso.

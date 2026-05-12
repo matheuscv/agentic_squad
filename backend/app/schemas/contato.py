@@ -89,6 +89,9 @@ class ContatoResposta(BaseModel):
     criado_em: datetime
     atualizado_em: datetime
     deletado_em: datetime | None = None
+    # Campos de auditoria — NULL para registros anteriores à migration (RF-F3.2-01)
+    criado_por_id: int | None = None
+    atualizado_por_id: int | None = None
 
 
 class ContatoListResponse(BaseModel):

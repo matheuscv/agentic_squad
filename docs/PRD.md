@@ -598,3 +598,129 @@ Com o MVP e as melhorias de UX entregues, esta fase eleva a qualidade técnica d
 - Cobertura de testes do frontend
 - Purga automática da lixeira por tempo (ex.: 30 dias)
 - Interface visual de lixeira no frontend
+
+---
+
+## 16. Fase 3.2 — Qualidade e Segurança (continuação)
+
+> **Data de referência:** 2026-05-12
+> Fase focada em auditoria de criação/modificação de contatos, proteção contra força bruta na autenticação e validação robusta de formulários no frontend com Zod.
+
+---
+
+### 16.1 Visão Geral da Fase 3.2
+
+Com a lixeira, PATCH e cobertura de testes entregues na Fase 3.1, esta fase fecha o ciclo de qualidade e segurança em três frentes complementares: (1) rastreabilidade de quem criou e quem modificou cada contato via campos de auditoria no modelo, (2) proteção do endpoint de login contra ataques de força bruta por meio de rate limiting por IP, e (3) substituição das validações manuais (regex inline, verificações ad-hoc) por schemas Zod centralizados em todos os formulários do frontend, elevando a type-safety e a consistência das mensagens de erro.
+
+---
+
+### 16.2 Requisitos Funcionais — Fase 3.2
+
+#### RF-F3.2-01 — Auditoria de criação e modificação de contatos
+
+- Adicionar as colunas `criado_por_id` e `atualizado_por_id` (ambas `Integer`, FK para `usuarios.id`, nullable) no modelo `Contato` (`backend/app/models/contato.py`).
+- Criar migration Alembic non-destructive para adicionar as duas colunas com `DEFAULT NULL`.
+- O endpoint `POST /contatos/` deve popular `criado_por_id` e `atualizado_por_id` com o `id` do usuário autenticado (`current_user.id`) no momento da criação.
+- Os endpoints `PUT /contatos/{id}` e `PATCH /contatos/{id}` devem atualizar `atualizado_por_id` com o `id` do usuário autenticado no momento da alteração.
+- `criado_por_id` nunca deve ser alterado após a criação (imutável).
+- O schema `ContatoResposta` deve expor os campos `criado_por_id: int | None` e `atualizado_por_id: int | None`.
+- A lógica de popular os campos de auditoria deve ser centralizada na camada de serviço (`contato_service.py`), recebendo o `id` do usuário como parâmetro — não deve estar no router.
+
+#### RF-F3.2-02 — Rate limiting no endpoint de login
+
+- Instalar e configurar `slowapi` (wrapper de `limits` para FastAPI) no backend.
+- Aplicar limite de **5 requisições por minuto por IP** no endpoint `POST /auth/login` (ou `POST /auth/token`, conforme o path atual).
+- Quando o limite for excedido, o endpoint deve retornar **HTTP 429 Too Many Requests** com body JSON `{"detail": "Muitas tentativas. Tente novamente em 1 minuto."}` em PT-BR.
+- O rate limiter deve usar o IP real do cliente como chave de identificação (suporte a `X-Forwarded-For` para ambientes com proxy, mas com fallback para `request.client.host`).
+- O contador de requisições deve ser armazenado em memória (sem dependência de Redis ou outro serviço externo), usando o backend padrão do `slowapi` (`MemoryStorage`).
+- O rate limiting não deve ser aplicado a nenhum outro endpoint nesta fase.
+- O header `Retry-After` deve ser incluído na resposta HTTP 429 com o número de segundos até a janela ser reiniciada.
+
+#### RF-F3.2-03 — Validação com Zod nos formulários do frontend
+
+- Instalar a biblioteca `zod` como dependência do frontend (`npm install zod`).
+- Criar um módulo centralizado `frontend/src/lib/schemas.ts` com os schemas Zod para cada formulário:
+  - `loginSchema` — campos: `email` (string, formato e-mail válido), `senha` (string, mínimo 6 caracteres).
+  - `cadastroSchema` — campos: `nome` (string, mínimo 2 caracteres, máximo 100), `email` (string, formato e-mail válido), `senha` (string, mínimo 6 caracteres).
+  - `contatoSchema` — campos: `nome` (string, obrigatório, mínimo 2 caracteres), `email` (string, formato e-mail válido), `telefone` (string opcional, regex `^\(\d{2}\) \d{4,5}-\d{4}$` quando fornecido), `empresa` (string opcional), `observacoes` (string opcional).
+- Os formulários de **login**, **cadastro** e **contato** (`ContatoForm.tsx`) devem usar os schemas Zod para validação, substituindo todas as validações manuais existentes (regex inline, condicionais ad-hoc).
+- Integrar Zod com `react-hook-form` via `@hookform/resolvers/zod` (instalar `react-hook-form` e `@hookform/resolvers` se ainda não estiverem no projeto).
+- As mensagens de erro exibidas ao usuário devem vir dos schemas Zod, definidas em PT-BR diretamente no schema (usando o parâmetro `message` dos validadores Zod).
+- A type-safety deve ser garantida via inferência de tipos Zod (`z.infer<typeof schema>`), eliminando a necessidade de interfaces/types manuais duplicados para os formulários.
+- Toda validação de formato de telefone atualmente feita via regex inline no `ContatoForm.tsx` deve ser removida e substituída pela regra do `contatoSchema`.
+
+---
+
+### 16.3 Regras de Negócio — Fase 3.2
+
+- **RN-F3.2-01**: `criado_por_id` é imutável após a criação — endpoints de atualização (PUT, PATCH) não devem modificá-lo em hipótese alguma.
+- **RN-F3.2-02**: Contatos criados antes da migration terão `criado_por_id = NULL` e `atualizado_por_id = NULL`; isso é esperado e não deve causar erros.
+- **RN-F3.2-03**: A exclusão (soft delete) de um usuário não deve causar erro de FK nos campos de auditoria — as colunas devem ter `ON DELETE SET NULL` ou ser nullable sem restrição de integridade referencial forçada no SQLite.
+- **RN-F3.2-04**: O rate limiting conta requisições independente de sucesso ou falha do login — tentativas com credenciais inválidas também consomem cota.
+- **RN-F3.2-05**: Em ambiente de testes (`pytest`), o rate limiter deve ser desativado ou ter limites elevados para não causar falsos negativos nos testes de autenticação. Usar variável de ambiente `TESTING=true` ou fixture que reseta o storage.
+- **RN-F3.2-06**: Os schemas Zod são a única fonte de verdade para validação no frontend — não deve existir lógica de validação duplicada fora dos schemas.
+- **RN-F3.2-07**: O módulo `frontend/src/lib/schemas.ts` não deve importar componentes React — é um módulo puro de validação, reutilizável em qualquer contexto.
+
+---
+
+### 16.4 Critérios de Aceite — Fase 3.2
+
+#### RF-F3.2-01 — Auditoria de contatos
+
+- [ ] `POST /contatos/` com token `adm` cria contato com `criado_por_id` igual ao `id` do usuário autenticado
+- [ ] `PUT /contatos/{id}` atualiza `atualizado_por_id` com o `id` do usuário que fez a alteração
+- [ ] `PATCH /contatos/{id}` atualiza `atualizado_por_id` com o `id` do usuário que fez a alteração
+- [ ] `criado_por_id` permanece inalterado após PUT ou PATCH
+- [ ] `GET /contatos/` e `GET /contatos/{id}` retornam os campos `criado_por_id` e `atualizado_por_id` no payload
+- [ ] `alembic upgrade head` roda sem erro em banco existente; contatos anteriores ficam com `NULL` nos campos de auditoria
+- [ ] `alembic downgrade -1` reverte a migration sem erro
+
+#### RF-F3.2-02 — Rate limiting no login
+
+- [ ] 5 requisições consecutivas ao `POST /auth/login` dentro de 1 minuto são bem-sucedidas (ou retornam 401 por credenciais inválidas, mas não 429)
+- [ ] A 6ª requisição dentro da mesma janela retorna HTTP 429
+- [ ] O body da resposta 429 contém `{"detail": "Muitas tentativas. Tente novamente em 1 minuto."}`
+- [ ] O header `Retry-After` está presente na resposta 429
+- [ ] Outros endpoints (ex.: `GET /contatos/`) não são afetados pelo rate limiter
+- [ ] Em ambiente de testes (`pytest`), os testes de autenticação passam sem acionar o 429
+
+#### RF-F3.2-03 — Validação com Zod
+
+- [ ] O arquivo `frontend/src/lib/schemas.ts` existe e exporta `loginSchema`, `cadastroSchema` e `contatoSchema`
+- [ ] Submeter o formulário de login com e-mail inválido exibe a mensagem de erro do schema Zod em PT-BR
+- [ ] Submeter o formulário de login com senha menor que 6 caracteres exibe mensagem de erro em PT-BR
+- [ ] Submeter o formulário de cadastro com nome menor que 2 caracteres exibe mensagem de erro em PT-BR
+- [ ] Submeter o formulário de contato com telefone em formato inválido exibe a mensagem de erro do `contatoSchema`
+- [ ] Submeter o formulário de contato com telefone vazio é aceito (campo opcional)
+- [ ] Não há regex de validação de telefone inline em `ContatoForm.tsx` (removida e centralizada no schema)
+- [ ] `npx tsc --noEmit` sem erros de tipagem após as alterações
+
+---
+
+### 16.5 Arquivos Impactados — Fase 3.2
+
+| Arquivo | Tipo de alteração |
+|---|---|
+| `backend/app/models/contato.py` | Adição dos campos `criado_por_id` e `atualizado_por_id` (FK nullable) |
+| `backend/app/schemas/contato.py` | Exposição de `criado_por_id` e `atualizado_por_id` em `ContatoResposta` |
+| `backend/app/services/contato_service.py` | Popular campos de auditoria em criar/atualizar |
+| `backend/app/routers/contatos.py` | Passar `current_user.id` ao service nas operações de escrita |
+| `backend/alembic/versions/<hash>_add_auditoria_contatos.py` | Nova migration: adiciona `criado_por_id` e `atualizado_por_id` |
+| `backend/app/main.py` | Configuração do `slowapi` (Limiter, handler de 429, middleware) |
+| `backend/app/routers/auth.py` | Aplicar decorator `@limiter.limit("5/minute")` no endpoint de login |
+| `frontend/src/lib/schemas.ts` | Novo arquivo — schemas Zod centralizados |
+| `frontend/src/app/login/page.tsx` (ou similar) | Integrar `loginSchema` via `react-hook-form` + `zodResolver` |
+| `frontend/src/app/cadastro/page.tsx` (ou similar) | Integrar `cadastroSchema` via `react-hook-form` + `zodResolver` |
+| `frontend/src/components/ContatoForm.tsx` | Integrar `contatoSchema`, remover validações manuais |
+| `frontend/package.json` | Adição de dependências: `zod`, `react-hook-form`, `@hookform/resolvers` |
+
+---
+
+### 16.6 Fora de Escopo da Fase 3.2
+
+- Interface visual para exibir quem criou/modificou cada contato (apenas os IDs são expostos via API)
+- Rate limiting em outros endpoints além de `POST /auth/login`
+- Rate limiting persistente entre reinicializações do servidor (sem Redis)
+- Validação Zod em formulários que não sejam login, cadastro e contato (ex.: formulário de perfil de usuário)
+- Testes de frontend (unitários ou E2E) para as validações Zod
+- Internacionalização dos schemas Zod (apenas PT-BR)

@@ -701,3 +701,290 @@ projeto/
 | RF-F3-01  | TASK-10 |
 | RF-F3-02  | TASK-08 |
 | RF-F3-03  | TASK-09 |
+
+---
+
+## Fase 3.2 — Qualidade e Segurança (continuação)
+
+> Tasks de backend (TASK-11 e TASK-12) são independentes entre si e podem rodar em paralelo. TASK-13 (frontend Zod) é independente de ambas e pode rodar em paralelo também.
+
+---
+
+- **TASK-11** [paralelo: ✅ com TASK-12, TASK-13] — Backend: Auditoria de criação/modificação em Contato
+
+  - **Arquivos a criar/modificar**:
+    - `backend/app/models/contato.py` (adicionar `criado_por_id`, `atualizado_por_id`)
+    - `backend/app/schemas/contato.py` (expor campos em `ContatoResposta`)
+    - `backend/app/services/contato_service.py` (popular campos de auditoria)
+    - `backend/app/routers/contatos.py` (passar `current_user.id` ao service)
+    - `backend/alembic/versions/<hash>_add_auditoria_contatos.py` (nova migration)
+
+  - **Requisitos atendidos**: RF-F3.2-01
+
+  - **Descrição**:
+
+    1. **`backend/app/models/contato.py`** — Adicionar dois campos FK nullable:
+       ```python
+       criado_por_id: Mapped[int | None] = mapped_column(
+           Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, default=None
+       )
+       atualizado_por_id: Mapped[int | None] = mapped_column(
+           Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, default=None
+       )
+       ```
+       Nota: SQLite aceita FK com `ON DELETE SET NULL` mas não as executa por padrão. Garantir que `PRAGMA foreign_keys = ON` está configurado na engine se a integridade for necessária. Para esta fase, nullable sem `ondelete` também é aceitável dado que soft delete já protege o dado.
+
+    2. **`backend/app/schemas/contato.py`** — Adicionar em `ContatoResposta`:
+       ```python
+       criado_por_id: int | None = None
+       atualizado_por_id: int | None = None
+       ```
+
+    3. **`backend/app/services/contato_service.py`**:
+
+       a. Alterar a assinatura de `criar_contato` para receber `usuario_id: int`:
+          - Setar `contato.criado_por_id = usuario_id` e `contato.atualizado_por_id = usuario_id` antes do commit.
+
+       b. Alterar a assinatura de `atualizar_contato` (PUT) para receber `usuario_id: int`:
+          - Setar `contato.atualizado_por_id = usuario_id` antes do commit.
+          - Não tocar em `criado_por_id` (RN-F3.2-01).
+
+       c. Alterar a assinatura de `patch_contato` (PATCH) para receber `usuario_id: int`:
+          - Setar `contato.atualizado_por_id = usuario_id` antes do commit.
+          - Não tocar em `criado_por_id`.
+
+    4. **`backend/app/routers/contatos.py`** — Nos endpoints POST, PUT e PATCH:
+       - Passar `usuario_id=current_user.id` nas chamadas ao service correspondente.
+       - O parâmetro `current_user` já vem de `Depends(require_adm)`.
+
+    5. **Migration Alembic** — Gerar com:
+       ```
+       alembic revision --autogenerate -m "add_auditoria_contatos"
+       ```
+       Revisar o arquivo gerado: deve conter apenas `ADD COLUMN criado_por_id INTEGER NULL` e `ADD COLUMN atualizado_por_id INTEGER NULL`, sem operações destrutivas. Rodar `alembic upgrade head` para confirmar.
+
+  - **Critério de pronto**:
+    - `POST /contatos/` retorna payload com `criado_por_id` igual ao `id` do usuário autenticado
+    - `PUT /contatos/{id}` atualiza `atualizado_por_id`; `criado_por_id` permanece inalterado
+    - `PATCH /contatos/{id}` atualiza `atualizado_por_id`; `criado_por_id` permanece inalterado
+    - `alembic upgrade head` e `alembic downgrade -1` executam sem erro em banco existente
+    - Contatos anteriores à migration ficam com `NULL` nos dois campos (sem erro)
+
+---
+
+- **TASK-12** [paralelo: ✅ com TASK-11, TASK-13] — Backend: Rate limiting no endpoint de login
+
+  - **Arquivos a modificar**:
+    - `backend/app/main.py` (configurar `slowapi`: Limiter, exception handler, middleware)
+    - `backend/app/routers/auth.py` (aplicar decorator `@limiter.limit` no endpoint de login)
+    - `backend/requirements.txt` (adicionar `slowapi`)
+
+  - **Requisitos atendidos**: RF-F3.2-02
+
+  - **Descrição**:
+
+    1. **`backend/requirements.txt`** — Adicionar:
+       ```
+       slowapi>=0.1.9
+       ```
+
+    2. **`backend/app/main.py`** — Configurar o `slowapi`:
+
+       a. Importar e instanciar o Limiter:
+          ```python
+          from slowapi import Limiter, _rate_limit_exceeded_handler
+          from slowapi.util import get_remote_address
+          from slowapi.errors import RateLimitExceeded
+
+          limiter = Limiter(key_func=get_remote_address)
+          ```
+
+       b. Registrar no app FastAPI:
+          ```python
+          app.state.limiter = limiter
+          app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+          ```
+          Nota: o handler padrão do slowapi retorna 429 com mensagem em inglês. Substituir por handler customizado que retorna `{"detail": "Muitas tentativas. Tente novamente em 1 minuto."}` e inclui o header `Retry-After`.
+
+       c. Handler customizado de 429:
+          ```python
+          from fastapi import Request
+          from fastapi.responses import JSONResponse
+
+          async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+              retry_after = exc.limit.reset_time - int(time.time()) if hasattr(exc, "limit") else 60
+              return JSONResponse(
+                  status_code=429,
+                  content={"detail": "Muitas tentativas. Tente novamente em 1 minuto."},
+                  headers={"Retry-After": str(max(retry_after, 1))},
+              )
+
+          app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+          ```
+
+    3. **`backend/app/routers/auth.py`** — Aplicar o limite no endpoint de login:
+
+       a. Importar o `limiter` do `main.py` (ou de um módulo compartilhado `app/limiter.py` para evitar import circular):
+          ```python
+          from app.limiter import limiter  # módulo dedicado, se necessário
+          ```
+
+       b. Adicionar o decorator antes do endpoint:
+          ```python
+          @router.post("/login")  # ou "/token" — conforme path atual
+          @limiter.limit("5/minute")
+          async def login(request: Request, ...):
+              ...
+          ```
+          Nota: o `slowapi` exige que `request: Request` seja o primeiro parâmetro da função do endpoint para extrair o IP.
+
+       c. Se o path atual não for `/auth/login` mas `/auth/token`, aplicar no path correto. Verificar o router existente antes de editar.
+
+    4. **Isolamento em testes** — Para evitar que os testes de autenticação sejam bloqueados pelo rate limiter:
+       - Criar fixture no `conftest.py` que reseta o storage do limiter antes de cada teste, ou
+       - Usar variável de ambiente `RATELIMIT_ENABLED=false` verificada na inicialização do Limiter (ex.: `Limiter(key_func=get_remote_address, enabled=os.getenv("RATELIMIT_ENABLED", "true") == "true")`).
+
+  - **Critério de pronto**:
+    - 5 requisições consecutivas ao endpoint de login são processadas (retornam 200 ou 401, nunca 429)
+    - A 6ª requisição dentro de 1 minuto retorna HTTP 429
+    - Body da resposta 429: `{"detail": "Muitas tentativas. Tente novamente em 1 minuto."}`
+    - Header `Retry-After` presente na resposta 429
+    - `GET /contatos/` não é afetado pelo rate limiter (nenhum 429 em uso normal)
+    - Testes de autenticação existentes passam sem acionar 429
+
+---
+
+- **TASK-13** [paralelo: ✅ com TASK-11, TASK-12] — Frontend: Validação com Zod em todos os formulários
+
+  - **Arquivos a criar**:
+    - `frontend/src/lib/schemas.ts`
+
+  - **Arquivos a modificar**:
+    - `frontend/src/app/login/page.tsx` (ou equivalente — formulário de login)
+    - `frontend/src/app/cadastro/page.tsx` (ou equivalente — formulário de cadastro)
+    - `frontend/src/components/ContatoForm.tsx`
+    - `frontend/package.json` (novas dependências)
+
+  - **Requisitos atendidos**: RF-F3.2-03
+
+  - **Descrição**:
+
+    1. **Instalar dependências**:
+       ```bash
+       npm install zod react-hook-form @hookform/resolvers
+       ```
+       Se `react-hook-form` já estiver instalado, apenas garantir que `zod` e `@hookform/resolvers` são adicionados.
+
+    2. **`frontend/src/lib/schemas.ts`** — Criar os três schemas Zod:
+
+       ```typescript
+       import { z } from "zod"
+
+       export const loginSchema = z.object({
+         email: z.string().email("E-mail inválido."),
+         senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
+       })
+
+       export const cadastroSchema = z.object({
+         nome: z
+           .string()
+           .min(2, "O nome deve ter pelo menos 2 caracteres.")
+           .max(100, "O nome deve ter no máximo 100 caracteres."),
+         email: z.string().email("E-mail inválido."),
+         senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
+       })
+
+       export const contatoSchema = z.object({
+         nome: z.string().min(2, "O nome deve ter pelo menos 2 caracteres."),
+         email: z.string().email("E-mail inválido."),
+         telefone: z
+           .string()
+           .optional()
+           .refine(
+             (val) =>
+               !val ||
+               /^\(\d{2}\) \d{5}-\d{4}$/.test(val) ||
+               /^\(\d{2}\) \d{4}-\d{4}$/.test(val),
+             { message: "Formato inválido. Use (99) 99999-9999 ou (99) 9999-9999." }
+           ),
+         empresa: z.string().optional(),
+         observacoes: z.string().optional(),
+       })
+
+       // Tipos inferidos — usar no lugar de interfaces manuais
+       export type LoginFormData = z.infer<typeof loginSchema>
+       export type CadastroFormData = z.infer<typeof cadastroSchema>
+       export type ContatoFormData = z.infer<typeof contatoSchema>
+       ```
+
+    3. **Formulário de login** (`login/page.tsx` ou equivalente):
+
+       a. Substituir o gerenciamento de estado atual (`useState` por campo) por `useForm` do `react-hook-form` com `zodResolver`:
+          ```typescript
+          import { useForm } from "react-hook-form"
+          import { zodResolver } from "@hookform/resolvers/zod"
+          import { loginSchema, LoginFormData } from "@/lib/schemas"
+
+          const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
+            resolver: zodResolver(loginSchema),
+          })
+          ```
+
+       b. Substituir a validação inline por exibição dos erros do `react-hook-form`:
+          ```tsx
+          {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
+          {errors.senha && <p className="text-sm text-red-500">{errors.senha.message}</p>}
+          ```
+
+       c. Remover toda lógica de validação manual (`if (!email.includes("@"))`, etc.).
+
+    4. **Formulário de cadastro** (`cadastro/page.tsx` ou equivalente):
+       - Mesma abordagem do login, usando `cadastroSchema` e `CadastroFormData`.
+
+    5. **`frontend/src/components/ContatoForm.tsx`**:
+
+       a. Substituir a validação manual de telefone (regex inline) pela regra do `contatoSchema`.
+
+       b. Integrar `useForm` com `zodResolver(contatoSchema)`:
+          - Se o formulário já usa `react-hook-form`, apenas adicionar o resolver.
+          - Se ainda usa `useState` por campo, migrar para `useForm` (preservando a lógica de `isDirty` do hook `useBeforeUnload` — adaptar para usar `formState.isDirty` do `react-hook-form` em vez de comparação manual).
+
+       c. Garantir que nenhuma regex de validação de telefone permaneça fora do `contatoSchema`.
+
+    6. **Verificação de tipagem**:
+       ```bash
+       npx tsc --noEmit
+       ```
+       Deve passar sem erros após todas as alterações.
+
+  - **Critério de pronto**:
+    - `frontend/src/lib/schemas.ts` existe e exporta os três schemas e tipos
+    - Formulário de login rejeita e-mail inválido com mensagem do Zod em PT-BR antes de submeter
+    - Formulário de login rejeita senha < 6 caracteres com mensagem do Zod em PT-BR
+    - Formulário de cadastro rejeita nome < 2 caracteres com mensagem do Zod em PT-BR
+    - `ContatoForm` rejeita telefone em formato inválido com mensagem do `contatoSchema`
+    - `ContatoForm` aceita telefone vazio sem erro
+    - Nenhuma regex de validação de telefone existe fora de `schemas.ts`
+    - `npx tsc --noEmit` sem erros de tipagem
+
+---
+
+## Resumo de Paralelismo — Fase 3.2
+
+| Task    | Fase | Pode rodar em paralelo com | Dependências |
+|---------|------|---------------------------|--------------|
+| TASK-11 | 3.2  | TASK-12, TASK-13          | nenhuma      |
+| TASK-12 | 3.2  | TASK-11, TASK-13          | nenhuma      |
+| TASK-13 | 3.2  | TASK-11, TASK-12          | nenhuma      |
+
+> As três tasks da Fase 3.2 são totalmente independentes entre si — editam arquivos disjuntos e não há dependência de runtime entre elas. Podem ser distribuídas para três DEVs distintos e integradas em qualquer ordem.
+
+---
+
+## Requisitos Cobertos — Fase 3.2
+
+| Requisito    | Task    |
+|--------------|---------|
+| RF-F3.2-01   | TASK-11 |
+| RF-F3.2-02   | TASK-12 |
+| RF-F3.2-03   | TASK-13 |
