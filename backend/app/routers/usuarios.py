@@ -1,9 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.exceptions import NotFoundError
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
     RoleAtualizacao,
@@ -13,6 +16,9 @@ from app.schemas.usuario import (
 )
 from app.services._helpers import garantir_unicidade
 from app.services.usuario_service import criar_usuario
+
+# Logger nomeado por módulo — TASK-05 (B.1).
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/usuarios", tags=["Usuários"])
 
@@ -24,10 +30,11 @@ router = APIRouter(prefix="/usuarios", tags=["Usuários"])
 def _get_or_404(db: Session, usuario_id: int) -> Usuario:
     usuario = db.get(Usuario, usuario_id)
     if usuario is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Usuário com id {usuario_id} não encontrado.",
-        )
+        # TASK-05: converte HTTPException(404) em NotFoundError (exceção de
+        # domínio). O handler global em exception_handlers.py garante o mesmo
+        # status code 404 e payload {"detail": "..."} — contrato HTTP preservado.
+        logger.warning("usuario inexistente acessado id=%s", usuario_id)
+        raise NotFoundError(f"Usuário com id {usuario_id} não encontrado.")
     return usuario
 
 

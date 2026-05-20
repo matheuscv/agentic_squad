@@ -1,5 +1,7 @@
 """Router FastAPI para o recurso Contatos."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,10 @@ from app.dependencies import get_current_user, require_adm
 
 from app.schemas.contato import ContatoCriar, ContatoAtualizar, ContatoPatch, ContatoResposta, ContatoListResponse
 from app.services import contato_service
+
+# Logger nomeado por módulo — TASK-05 (B.1). Não substitui prints (nenhum
+# existia neste arquivo); habilita rastreamento estruturado via handlers globais.
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/contatos", tags=["Contatos"])
 

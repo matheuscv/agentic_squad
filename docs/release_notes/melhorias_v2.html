@@ -268,6 +268,18 @@
           <td>Auditoria <code>criado_por_id</code>/<code>atualizado_por_id</code>, rate limiting, Zod</td>
         </tr>
         <tr>
+          <td><span class="badge badge-green">✅ Feito</span></td>
+          <td><strong>Fase B.1</strong> — Logging estruturado JSON (v2)</td>
+          <td><code>SCRUM-8</code></td>
+          <td><code>logging_config.py</code>, middleware <code>request_id</code>, <code>duration_ms</code>, redaction de chaves sensíveis</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-green">✅ Feito</span></td>
+          <td><strong>Fase B.2</strong> — Tratamento centralizado de exceções (v2)</td>
+          <td><code>SCRUM-8</code></td>
+          <td><code>exceptions.py</code> (hierarquia <code>DomainError</code>), <code>exception_handlers.py</code> global, <code>except Exception</code> eliminado em <code>main.py</code></td>
+        </tr>
+        <tr>
           <td><span class="badge badge-gray">⏳ Pendente</span></td>
           <td><strong>Fase 2</strong> — UX</td>
           <td>—</td>
@@ -383,36 +395,42 @@
     <div class="phase-header">
       <h2>Fase B — Observabilidade e operação</h2>
       <span class="badge badge-orange">Alto</span>
+      <span class="badge badge-green">⚙️ Parcialmente concluída (B.1 + B.2)</span>
       <span class="effort">~12h estimadas</span>
     </div>
     <p class="phase-intro">
       O backend não tem logging estruturado nem captura centralizada de exceções, o que dificulta
       qualquer investigação de incidente. Esta fase prepara o sistema para operação real.
+      <br><strong>Status atual:</strong> B.1 e B.2 entregues (Jira <code>SCRUM-8</code>, regressivo 236/236, cobertura 98%). B.3, B.4 e B.5 permanecem pendentes.
     </p>
     <ul class="items">
       <li>
-        <div class="item-title">B.1 — Logging estruturado em JSON</div>
+        <div class="item-title">B.1 — Logging estruturado em JSON <span class="badge badge-green">✅ Feito</span></div>
         <div class="item-detail">
           Adicionar <code>logging.getLogger(__name__)</code> em todos os services e routers.
           Em produção, configurar handler com formato JSON (ex: <code>python-json-logger</code>) incluindo
           <code>request_id</code>, <code>user_id</code>, <code>route</code> e <code>duration_ms</code>.
+          <br><strong>Entregue:</strong> <code>backend/app/logging_config.py</code> (ContextFilter + RedactionFilter + setup JSON em PROD / texto em DEV); <code>backend/app/middleware/request_context.py</code> (gera/propaga <code>X-Request-ID</code>, mede <code>duration_ms</code>); logger nomeado em todos os routers/services. Doc operacional em <code>docs/OPERACAO_LOGS.md</code>.
         </div>
         <div class="item-meta">
           <span class="item-tag new">Novo achado</span>
           <span class="item-effort">Esforço: ~3h</span>
+          <span class="item-tag from-v1">Jira: SCRUM-8</span>
         </div>
       </li>
       <li>
-        <div class="item-title">B.2 — Tratamento centralizado de exceções</div>
+        <div class="item-title">B.2 — Tratamento centralizado de exceções <span class="badge badge-green">✅ Feito</span></div>
         <div class="item-detail">
           Criar <code>backend/app/exceptions.py</code> com hierarquia de exceções de domínio
           (<code>DomainError</code>, <code>NotFoundError</code>, <code>ConflictError</code>, etc.) e registrar
           um <code>exception_handler</code> global no FastAPI que converte cada classe em HTTP status apropriado
           e loga o stack trace. Elimina o <code>except Exception: pass</code> em <code>main.py:36</code>.
+          <br><strong>Entregue:</strong> <code>backend/app/exceptions.py</code> (DomainError, NotFoundError 404, ConflictError 409, ValidationError 422, AuthenticationError 401, AuthorizationError 403); <code>backend/app/exception_handlers.py</code> com handler genérico Exception → 500 sem stack trace no body; <code>except Exception</code> em <code>main.py</code> estreitado para <code>(AttributeError, TypeError)</code> com log. 21 testes novos (middleware/handlers/redaction/setup), regressivo 236/236, cobertura 98%.
         </div>
         <div class="item-meta">
           <span class="item-tag new">Novo achado</span>
           <span class="item-effort">Esforço: ~3h</span>
+          <span class="item-tag from-v1">Jira: SCRUM-8</span>
         </div>
       </li>
       <li>

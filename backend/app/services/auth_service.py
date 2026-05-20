@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -6,6 +7,9 @@ from jose import JWTError, jwt
 
 from app.config import settings
 from app.schemas.auth import TokenData
+
+# Logger nomeado por módulo — TASK-05 (B.1). Adicionado sem mudar comportamento.
+logger = logging.getLogger(__name__)
 
 
 def hash_senha(senha: str) -> str:

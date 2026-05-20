@@ -1,145 +1,137 @@
-# PRD — FASE C: Qualidade de Código e Arquitetura
+# PRD — Fase B.1 + B.2 — Observabilidade backend (Logging estruturado e Tratamento centralizado de exceções)
 
 ## 1. Visão Geral
-A FASE C do roadmap v2 do Contact Management App é uma fase de **redução de dívida técnica e refatoração arquitetural**, focada em melhorar a qualidade interna do código antes do início da Fase D (novas funcionalidades). Engloba refatoração de componentes React de alta complexidade, criação de hooks reutilizáveis, modernização da API SQLAlchemy (1.x -> 2.0), criação de helpers compartilhados no backend, otimização de consultas via índices, elevação da cobertura de testes do frontend e introdução de linters de segurança no pipeline. O objetivo geral é entregar uma base de código mais manutenível, mais testada e mais segura, sem alterar o comportamento funcional já entregue nas Fases 1, 3.1 e 3.2.
+
+O Contact Management App (backend FastAPI + frontend Next.js 14) já concluiu as Fases 1, 3.1 e 3.2, entregando correções imediatas, soft delete, lixeira, auditoria de criação/atualização, rate limiting e validação Zod. Apesar dessas evoluções, o backend ainda não tem **logging estruturado** nem **tratamento centralizado de exceções**, o que dificulta a investigação de incidentes, esconde erros silenciosamente (existe um `except Exception: pass` em `backend/app/main.py:36`) e impede correlação de eventos por requisição.
+
+Esta entrega corresponde **exclusivamente** aos itens **B.1 (Logging estruturado em JSON)** e **B.2 (Tratamento centralizado de exceções)** da Fase B do roadmap v2. Trata-se de uma fase preparatória obrigatória para qualquer operação real do sistema, sem alterações de contratos públicos da API nem novas features funcionais para o usuário final.
 
 ## 2. Objetivo
-Reduzir a dívida técnica acumulada nas Fases 1 a 3.2 e preparar terreno arquitetural para a Fase D, padronizando o código (SQLAlchemy 2.0, hooks reutilizáveis, componentes pequenos), elevando a cobertura de testes do frontend para >= 60% e introduzindo varredura automatizada de segurança no pipeline.
+
+Habilitar observabilidade operacional do backend de forma que qualquer requisição possa ser rastreada ponta-a-ponta por um `request_id`, e que toda exceção lançada pelas camadas de serviço seja convertida automaticamente em uma resposta HTTP semanticamente correta, com stack trace registrado em log estruturado, eliminando a captura silenciosa de exceções existente hoje.
 
 ## 3. Público-Alvo
-- **Equipe de desenvolvimento (frontend e backend)** — principais beneficiários da melhoria de manutenibilidade.
-- **Squad de QA** — recebe testes automatizados ampliados e pipeline com gates de segurança.
-- **Tech Lead / Arquiteto** — valida padronização SQLAlchemy 2.0 e estrutura de hooks/helpers.
-- **Time de segurança (AppSec)** — passa a contar com bandit + eslint-plugin-security no CI.
-- **Stakeholders de produto** — beneficiados indiretamente pela maior velocidade de entrega das próximas fases.
+
+- **Squad de engenharia** (devs e SRE) que precisa investigar incidentes em ambiente produtivo.
+- **Tech Lead / Code reviewer** que precisa garantir que o backend siga padrões de logging e de propagação de erros.
+- **Operações futuras** (Sentry, agregadores de log, K8s) que dependem de logs estruturados para alertas e dashboards.
 
 ## 4. Premissas e Decisões
-- A Fase C é puramente **interna/refatoração**: não altera contratos públicos (REST API, UI visível) nem o modelo de dados (exceto adição de índices).
-- O backend (`backend/app/`) já está em FastAPI + SQLAlchemy + Alembic e suporta migrar para a API 2.0 (`select()`) sem upgrade de versão maior.
-- O frontend (`frontend/src/`) usa Next.js 14 + Jest + Testing Library, com cobertura aparente < 20% — assume-se que a infraestrutura de testes já está pronta e basta escrever os casos.
-- **Fase E.5 (pre-commit hook)** ainda não existe; nesta fase, basta deixar `bandit` e `eslint-plugin-security` instalados e configurados para uso futuro.
-- A migração `db.query(Model)` -> `select(Model)` será aplicada apenas em routers e services existentes, sem alterar comportamento observável.
-- Todos os índices criados em `contato.py` serão refletidos em uma migration Alembic dedicada, sem `down_revision` quebrando o histórico.
-- A meta de cobertura de 60% no frontend é medida pelo `coverage` global agregado do Jest (statements).
-- Componentes extraídos (`InputField`, `SelectField`, `TextAreaField`) ficarão em `frontend/src/components/form/` (estrutura sugerida) e seguirão o padrão de props do `ContatoForm` atual.
+
+- **Sem alterações em contratos públicos da API** — todos os endpoints continuam respondendo com o mesmo schema atual; apenas a forma de produzir esses status codes muda internamente.
+- **Biblioteca escolhida para JSON logging:** `python-json-logger` (sugerida no item B.1 da release v2). Decisão registrada para evitar avaliação adicional no momento do desenvolvimento.
+- **Ambiente DEV mantém logs em texto legível** (formato `%(asctime)s %(levelname)s %(name)s %(message)s`); ambiente PROD usa JSON. A escolha é dirigida pela variável de ambiente `ENV` já existente em `backend/app/config.py`.
+- **`request_id` é gerado por middleware**; se o header `X-Request-ID` chegar na requisição, ele é reutilizado (idempotência com proxies/edge); caso contrário, gera-se um UUID v4.
+- **`user_id` é obtido do contexto JWT** quando disponível (usuário autenticado); para rotas públicas ou anônimas, o campo fica como `null` no log.
+- **Dados sensíveis NUNCA são logados** — payloads de senha, tokens, headers `Authorization`, e qualquer PII além do `user_id` estão proibidos. Implementação deve incluir filtro de redaction explícito.
+- **Refatoração de `HTTPException` ad-hoc** é feita somente onde a substituição por exceção tipada faz sentido de domínio (ex: contato não encontrado vira `NotFoundError`). Onde já há controle local de status code que não corresponde a um conceito de domínio, mantém-se como está para não inflar o escopo.
+- **Compatibilidade com testes existentes**: a suíte atual de testes regressivos (Fases 3.1 e 3.2) deve continuar verde sem modificações.
+- **Sem dependência de serviços externos** — Sentry (B.3) está fora do escopo desta entrega.
 
 ## 5. Requisitos Funcionais
 
-### Frontend — Refatoração e Reuso
+- **RF-01 — Logger nomeado em services e routers**: Todo módulo dentro de `backend/app/services/` e `backend/app/routers/` deve declarar `logger = logging.getLogger(__name__)` no topo do arquivo e emitir logs nos pontos de entrada/saida relevantes (sucesso, erro tratado, decisão de negócio).
 
-- **RF-01 (C.1) — Quebra do ContatoForm.tsx**
-  Refatorar `frontend/src/components/ContatoForm.tsx` (atualmente 377 linhas) extraindo:
-  - Lógica de validação para um hook `useContatoFormValidation()` em `frontend/src/hooks/`.
-  - Campos do formulário em componentes reutilizáveis `InputField`, `SelectField`, `TextAreaField` (em `frontend/src/components/form/`).
-  - O componente final `ContatoForm.tsx` deve ficar entre **150 e 180 linhas**.
+- **RF-02 — Configuração de logging JSON em produção**: Em `ENV=production`, o backend deve configurar um handler raiz com formato JSON usando `python-json-logger`, contendo no mínimo os campos: `timestamp`, `level`, `logger`, `message`, `request_id`, `user_id`, `route`, `duration_ms`. Em `ENV=development` o formato deve ser texto legível em uma linha.
 
-- **RF-02 (C.2) — Hook useDebounce reutilizável**
-  Criar `frontend/src/hooks/useDebounce.ts` com assinatura `useDebounce<T>(value: T, delay: number): T`.
-  Substituir o debounce ad-hoc com `useRef` em `frontend/src/app/contatos/page.tsx` pelo novo hook, mantendo o mesmo comportamento de busca.
+- **RF-03 — Middleware de `request_id` e medição de duração**: Um middleware FastAPI deve, para cada requisição, (a) ler `X-Request-ID` do header ou gerar um UUID v4, (b) armazenar o valor em `contextvars` acessível por todo o ciclo da requisição, (c) marcar o tempo de início, (d) ao final da requisição emitir um log estruturado com `request_id`, `route` (path template), `method`, `status_code`, `duration_ms`, `user_id` (se autenticado) e (e) devolver `X-Request-ID` no header de resposta.
 
-- **RF-03 (C.3) — Memoização estratégica em ContatoTable**
-  Em `frontend/src/components/ContatoTable.tsx`:
-  - Envolver o componente `SkeletonRow` em `React.memo`.
-  - Envolver a função/array de ordenação dos contatos em `useMemo`, com dependências corretas.
-  - Não alterar comportamento visual ou ordenação atual.
+- **RF-04 — Hierarquia de exceções de domínio**: Criar `backend/app/exceptions.py` contendo, no mínimo, as classes: `DomainError` (base, derivada de `Exception`), `NotFoundError`, `ConflictError`, `ValidationError`, `AuthenticationError`, `AuthorizationError`. Cada classe aceita `message: str` e `details: dict | None` no construtor.
 
-### Backend — Modernização e Padronização
+- **RF-05 — Exception handlers globais no FastAPI**: Registrar handlers globais que convertam:
+  - `NotFoundError` -> HTTP 404
+  - `ConflictError` -> HTTP 409
+  - `ValidationError` -> HTTP 422
+  - `AuthenticationError` -> HTTP 401
+  - `AuthorizationError` -> HTTP 403
+  - `DomainError` (genérica não mapeada acima) -> HTTP 400
+  - `Exception` (qualquer não tratada) -> HTTP 500 com payload genérico (sem vazar stack trace ao cliente)
 
-- **RF-04 (C.4) — Migração SQLAlchemy 1.x -> 2.0**
-  Substituir, em **todos** os arquivos de `backend/app/routers/` e `backend/app/services/`, o padrão `db.query(Model)...` pelo padrão SQLAlchemy 2.0 baseado em `select(Model)` + `db.execute(...)` (ou `db.scalars(...)`).
-  Manter o comportamento observável idêntico.
+  Todos os handlers devem registrar o evento no logger estruturado, com `exc_info=True` para `Exception` e `DomainError`, incluindo `request_id` no contexto.
 
-- **RF-05 (C.5) — Helper de validação de unicidade**
-  Criar `backend/app/services/_helpers.py` com função utilitária para o padrão "buscar registro por campo único (ex.: email) e levantar `HTTPException(409)` se já existir".
-  Substituir o padrão duplicado em `backend/app/routers/usuarios.py` e `backend/app/services/contato_service.py` pelo helper.
+- **RF-06 — Remoção do `except Exception: pass`**: O bloco em `backend/app/main.py:36` deve ser eliminado e substituído pelo uso correto da infraestrutura de exceções, sem omitir falhas. Caso a finalidade original do bloco fosse tolerar a ausência de um recurso (ex: criação opcional de tabelas), o tratamento explícito deve logar o erro em nível `WARNING` e continuar; caso fosse erro acidental, deve propagar.
 
-- **RF-06 (C.6) — Índices em colunas de busca e ordenação**
-  Em `backend/app/models/contato.py`, adicionar `index=True` nas colunas: `nome`, `email`, `criado_em`.
-  Gerar uma **migration Alembic** correspondente (autogenerate revisada) que crie esses índices no banco.
+- **RF-07 — Refactor seletivo de `HTTPException` para exceções de domínio**: Onde já existem `raise HTTPException(status_code=404, ...)` claramente vinculados a "recurso não encontrado" (ex: contato/usuário inexistente) e `HTTPException(status_code=409, ...)` para "email duplicado", substituir por `NotFoundError` / `ConflictError`. O comportamento HTTP visível ao cliente deve permanecer idêntico.
 
-### Qualidade — Testes e Segurança
-
-- **RF-07 (C.7) — Elevar cobertura de testes do frontend para >= 60%**
-  Escrever testes Jest + Testing Library cobrindo, no mínimo:
-  - Fluxo de **login** (formulário, erros, sucesso).
-  - **Validação do ContatoForm** (campos obrigatórios, formato de email, máscaras).
-  - **Paginação e busca** da listagem em `app/contatos/page.tsx`.
-  - **Modal de "alterações não salvas"** ao tentar sair de um formulário sujo.
-  Meta: cobertura global de **statements >= 60%** reportada pelo Jest.
-
-- **RF-08 (C.8) — Linter de segurança no pipeline**
-  - Backend: instalar e configurar **bandit** (Python) com arquivo de configuração na raiz do `backend/`.
-  - Frontend: instalar **eslint-plugin-security** e ativá-lo na configuração ESLint do `frontend/`.
-  - O build (CI) deve **falhar** quando houver findings de severidade `MEDIUM` ou superior.
-  - As ferramentas devem ficar prontas para futuro uso em pre-commit (Fase E.5), mas **não** é necessário criar o hook agora.
+- **RF-08 — Redaction de dados sensíveis em logs**: Implementar um filtro de logging que remova/mascare valores das chaves: `password`, `senha`, `token`, `access_token`, `refresh_token`, `authorization`, `secret`. O filtro é aplicado antes da serialização JSON.
 
 ## 6. Requisitos Não-Funcionais
 
-- **RNF-01 — Manutenibilidade**: nenhum arquivo `.tsx` de componente deve exceder 200 linhas após a refatoração da FASE C.
-- **RNF-02 — Compatibilidade**: nenhum contrato público (REST API, payloads, status codes, UI visível) pode ser alterado. Todos os testes existentes devem continuar passando.
-- **RNF-03 — Performance de leitura**: consultas em `contatos` por `nome`, `email` ou ordenadas por `criado_em` devem se beneficiar dos novos índices (validação por `EXPLAIN` recomendada em base de teste com >= 10k linhas).
-- **RNF-04 — Cobertura de testes**: cobertura global do frontend (statements) **>= 60%** medida via `jest --coverage`.
-- **RNF-05 — Segurança estática**: pipeline deve quebrar build com findings `MEDIUM` ou `HIGH` do bandit e do eslint-plugin-security.
-- **RNF-06 — Padronização SQLAlchemy**: zero ocorrências de `db.query(` em `backend/app/routers/` e `backend/app/services/` após a fase.
-- **RNF-07 — Reusabilidade**: hooks (`useDebounce`, `useContatoFormValidation`) e componentes (`InputField`, `SelectField`, `TextAreaField`) devem ser genéricos o suficiente para uso por outras telas no futuro.
-- **RNF-08 — Documentação mínima**: cada hook/helper criado deve ter docstring/JSDoc com exemplo de uso.
+- **RNF-01 — Performance**: A introdução de logging e middleware não pode aumentar a latência média (p50) de endpoints em mais de **5 ms**, e a p95 em mais de **15 ms**, medidos com a suíte de testes atual. Logging em `INFO` deve ser usado com parcimônia em hot paths.
+
+- **RNF-02 — Compatibilidade de ambiente**: Ambiente `development` mantém logs legíveis (texto, uma linha por evento) para não atrapalhar o debug local. Comportamento controlado por `ENV` em `backend/app/config.py`.
+
+- **RNF-03 — Compatibilidade de contrato**: Nenhum endpoint pode mudar request schema, response schema ou status code observável após este PR. A suíte de testes existente deve passar sem alterações.
+
+- **RNF-04 — Segurança de logs (LGPD / hardening)**: Logs NÃO podem conter senhas, tokens JWT, headers `Authorization`, ou qualquer credencial. A redaction (RF-08) é mandatória. Stack traces no log podem conter request_id e nome de função, mas nunca payloads brutos com PII.
+
+- **RNF-05 — Manutenibilidade**: O setup de logging deve estar centralizado em um módulo único (`backend/app/logging_config.py` ou similar) carregado uma única vez no startup. Nenhum `print()` deve permanecer no código de produção.
+
+- **RNF-06 — Testabilidade**: Os exception handlers e o middleware de `request_id` devem ser cobertos por testes unitários/integrados (pytest), com pelo menos um caso por classe de exceção e um caso para a propagação do header `X-Request-ID`.
 
 ## 7. Stack Técnica Sugerida
 
-- **Linguagem (backend)**: Python 3.11+
-- **Framework (backend)**: FastAPI + SQLAlchemy 2.0 (API `select()`) + Alembic
-- **Linguagem (frontend)**: TypeScript
-- **Framework (frontend)**: Next.js 14 (App Router) + React 18 + Tailwind CSS
-- **Validação**: Zod (frontend) + Pydantic (backend)
-- **Testes**: Jest + React Testing Library (frontend); pytest (backend, já existente)
-- **Linters de segurança**: bandit (Python) + eslint-plugin-security (JS/TS)
-- **Persistência**: o banco já configurado (SQLite/Postgres conforme ambiente); somente adição de índices via Alembic.
+- **Linguagem**: Python 3.11+ (mesma do backend atual)
+- **Framework**: FastAPI (mantido)
+- **Logging JSON**: `python-json-logger`
+- **Persistência**: SQLAlchemy (sem alterações)
+- **Testes**: `pytest` + `pytest-asyncio` + `httpx` (já em uso)
+- **Suporte ao `request_id`**: `contextvars` (stdlib) para propagação segura entre middleware, services e logger filters.
 
 ## 8. Critérios de Aceite (alto nível)
 
-- [ ] **C.1**: `ContatoForm.tsx` reduzido para 150–180 linhas; hook `useContatoFormValidation` e componentes `InputField`/`SelectField`/`TextAreaField` criados e usados.
-- [ ] **C.2**: `frontend/src/hooks/useDebounce.ts` criado; `app/contatos/page.tsx` usa o hook em lugar do debounce com `useRef`; comportamento de busca idêntico.
-- [ ] **C.3**: `SkeletonRow` envolvido em `React.memo`; função de ordenação em `useMemo` com deps corretas; sem regressões visuais.
-- [ ] **C.4**: Nenhuma ocorrência de `db.query(` em `backend/app/routers/` ou `backend/app/services/`; todos os testes pytest continuam passando.
-- [ ] **C.5**: `backend/app/services/_helpers.py` criado; `routers/usuarios.py` e `services/contato_service.py` consomem o helper; sem duplicação do padrão de 409.
-- [ ] **C.6**: `nome`, `email`, `criado_em` com `index=True` em `models/contato.py`; migration Alembic gerada, revisada e aplicável.
-- [ ] **C.7**: Cobertura global do frontend (statements) **>= 60%** no relatório do Jest; suítes de login, validação, paginação/busca e modal "alterações não salvas" presentes e passando.
-- [ ] **C.8**: `bandit` e `eslint-plugin-security` instalados e configurados; pipeline falha em findings `MEDIUM`/`HIGH`; documentação de uso registrada no README do backend e do frontend.
-- [ ] Nenhuma quebra nos endpoints/contratos públicos; documentação OpenAPI inalterada.
-- [ ] PR único ou conjunto de PRs revisados e aprovados pelo Tech Lead.
+- [ ] **CA-01**: Em `ENV=production`, ao chamar qualquer endpoint, o stdout produz exatamente 1 linha JSON por requisição contendo `request_id`, `user_id`, `route`, `duration_ms`, `status_code`.
+- [ ] **CA-02**: Em `ENV=development`, ao chamar qualquer endpoint, o stdout produz logs em texto legível, sem JSON.
+- [ ] **CA-03**: Enviar `X-Request-ID: abc-123` na requisição faz o mesmo valor aparecer no log estruturado e no header `X-Request-ID` da resposta.
+- [ ] **CA-04**: Ausência do header `X-Request-ID` na requisição faz o backend gerar um UUID v4 válido e devolvê-lo no header de resposta.
+- [ ] **CA-05**: Levantar `NotFoundError("contato")` em qualquer service produz HTTP 404 com payload `{"detail": "..."}` consistente.
+- [ ] **CA-06**: Levantar `ConflictError("email já existe")` produz HTTP 409.
+- [ ] **CA-07**: Levantar `AuthenticationError` produz HTTP 401; `AuthorizationError` produz HTTP 403.
+- [ ] **CA-08**: Levantar uma exceção não tratada (`Exception`) produz HTTP 500 com payload genérico (sem stack trace exposto), e o stack trace completo é registrado em log.
+- [ ] **CA-09**: O bloco `except Exception: pass` original em `backend/app/main.py:36` não existe mais no código (`grep -nR "except Exception: pass" backend/` retorna vazio).
+- [ ] **CA-10**: Um teste automatizado envia uma requisição com `password` no corpo e verifica que o log emitido contém o valor mascarado (ex: `"***"`) e não o texto original.
+- [ ] **CA-11**: A suíte de testes existente (Fases 1, 3.1, 3.2) passa 100% sem modificações nos testes.
+- [ ] **CA-12**: Pelo menos um endpoint que hoje usa `HTTPException(status_code=404, ...)` é refatorado para usar `NotFoundError`, mantendo o comportamento observável idêntico, com teste regressivo confirmando.
 
-## 9. Riscos e Dependências
+## 9. Definição de Pronto (DoD)
 
-- **Risco R-01 — Migração SQLAlchemy 2.0 silenciosa**: trocas mecânicas de `query()` por `select()` podem alterar lazy loading ou eager loading. **Mitigação**: rodar suite de testes completa após cada arquivo migrado.
-- **Risco R-02 — Migration Alembic em ambientes existentes**: criação de índices em tabela grande pode ser lenta. **Mitigação**: usar `CREATE INDEX CONCURRENTLY` caso o banco-alvo seja Postgres; documentar tempo estimado.
-- **Risco R-03 — Quebra de testes existentes ao refatorar ContatoForm**: extração de componentes pode invalidar snapshots/seletores. **Mitigação**: atualizar testes em conjunto com a refatoração e priorizar `getByRole`/`getByLabelText`.
-- **Risco R-04 — Findings de bandit/eslint-plugin-security em código legado**: ativar gate `MEDIUM` pode travar build no dia 1. **Mitigação**: rodar varredura prévia, corrigir ou suprimir falsos positivos justificados antes de ligar o gate.
-- **Dependência D-01**: C.6 (índices) **prepara** D.1 e D.4 (listagem de contatos com filtros avançados / ordenação).
-- **Dependência D-02**: C.2 (`useDebounce`) **prepara** D.4 (busca global com debounce padronizado).
-- **Dependência D-03**: C.4 (SQLAlchemy 2.0) é pré-requisito implícito para qualquer feature futura que use `async` sessions.
+- [ ] Código implementado e merged na `master` (ou branch principal acordada).
+- [ ] Todos os critérios de aceite (CA-01 a CA-12) verificados.
+- [ ] Testes novos cobrindo: middleware de `request_id`, cada classe de exception handler, redaction de senhas.
+- [ ] Suíte completa de testes (backend) passando em local e CI.
+- [ ] Linter de segurança (bandit, se ativo) sem novas findings de severidade >= MEDIUM.
+- [ ] Nenhum `print()` remanescente em `backend/app/`.
+- [ ] Nenhum `except Exception: pass` em `backend/app/`.
+- [ ] README ou doc operacional atualizado com instrução de como ler logs em DEV e em PROD.
+- [ ] Aprovação de code review por pelo menos 1 par.
 
-## 10. Definition of Done (DoD)
+## 10. Dependências e Premissas Técnicas
 
-Esta fase é considerada **pronta** quando:
+- **Dependência interna**: `backend/app/config.py` já expõe `ENV`; nenhum trabalho adicional é necessário para detectar ambiente.
+- **Dependência de pacote**: adicionar `python-json-logger` ao `requirements.txt` (versão pinned).
+- **Premissa**: Sentry (B.3) NÃO é integrado nesta fase — porém o desenho de logging deve permitir que B.3 seja plugado depois sem refatorações.
+- **Premissa**: O usuário autenticado é resolvido pela dependência `Depends(get_current_user)` já existente; o middleware NÃO duplica essa lógica — apenas lê `request.state.user_id` se a dependência tiver preenchido.
+- **Premissa**: Não há requisito de centralizar logs em agregador externo (Datadog/CloudWatch) nesta entrega — stdout é o destino.
 
-1. Todos os 8 critérios de aceite (RF-01 a RF-08) estão marcados como concluídos.
-2. CI verde em todos os jobs (lint, type-check, testes backend, testes frontend, bandit, eslint-plugin-security).
-3. Cobertura global do frontend (statements) **>= 60%** reportada no log do CI.
-4. Migration Alembic da RF-06 testada em ambiente de homologação (up + down).
-5. Code review aprovado por pelo menos um Tech Lead.
-6. CHANGELOG ou release note atualizado mencionando a entrega da FASE C.
-7. Nenhum endpoint REST teve seu contrato (path, payload, status code) alterado.
-8. Nenhuma feature funcional nova foi introduzida.
+## 11. Riscos e Mitigações
 
-## 11. Fora de Escopo
+| Risco | Impacto | Mitigação |
+|---|---|---|
+| Logging síncrono em hot path degrada latência | Médio | Manter nível `INFO` em rotas, `DEBUG` apenas dentro de services; medir p50/p95 antes e depois e validar contra RNF-01. |
+| Vazamento acidental de senha/token em log | Alto (PCI/LGPD) | Filtro de redaction obrigatório (RF-08) + teste automatizado (CA-10). Revisão manual dos pontos onde se loga `request.body`. |
+| Refactor de `HTTPException` quebra teste regressivo | Médio | Substituições feitas uma a uma, com a suíte rodando após cada mudança. Comportamento HTTP visível precisa permanecer idêntico (CA-12). |
+| `contextvars` mal propagado em handlers async | Médio | Cobrir com teste async dedicado; usar `ContextVar.set()` no middleware ANTES de `await call_next(request)`. |
+| Remoção do `except Exception: pass` quebra startup | Baixo | Investigar a intenção original do bloco (provavelmente criação tolerante de tabelas) antes de remover; substituir por log + propagação controlada. |
+| Volume excessivo de logs em PROD aumenta custo | Baixo | Padronizar níveis: rotas em `INFO`, services em `DEBUG`, erros em `ERROR`/`WARNING`. Sem `INFO` dentro de loops. |
 
-- **Fase A** (correções urgentes futuras) — fora de escopo.
-- **Fase B** (correções imediatas adicionais) — fora de escopo.
-- **Fase D** (novas funcionalidades, ex.: filtros avançados, busca global, importação) — fora de escopo; será habilitada por esta fase, mas não executada agora.
-- **Fase E** (DevEx, pre-commit hooks, CI avançado) — apenas as ferramentas `bandit` e `eslint-plugin-security` são introduzidas; a integração via `pre-commit` (E.5) **não** faz parte desta fase.
-- Alterações de UX/UI visíveis ao usuário final.
-- Alterações em contratos REST públicos, payloads ou OpenAPI.
-- Migração para outra versão do FastAPI, Next.js, React, Node ou Python.
-- Refatoração de componentes fora do escopo listado (apenas `ContatoForm`, `ContatoTable`, `app/contatos/page.tsx`).
-- Otimização de queries via reescrita SQL — apenas índices e migração para API 2.0.
-- Implementação de testes E2E (Playwright/Cypress) — apenas testes unitários/integração via Jest.
+## 12. Fora de Escopo
+
+- **B.3 — Integração com Sentry** (backend e frontend) — fica para fase posterior.
+- **B.4 — Audit log persistente em tabela `audit_log`** — fica para fase posterior.
+- **B.5 — Healthcheck `/health/live` e `/health/ready`** — fica para fase posterior (será necessário para Docker/K8s em Fase E).
+- Qualquer item das Fases A, C, D, E do roadmap v2.
+- Mudanças em contratos públicos da API.
+- Frontend: nenhuma alteração em `frontend/` faz parte desta entrega.
+- Integração com agregadores externos de log (Datadog, CloudWatch, ELK).
+- Métricas / tracing distribuído (OpenTelemetry) — não solicitado.
+- Configuração de níveis de log dinâmica em runtime — fora do escopo.

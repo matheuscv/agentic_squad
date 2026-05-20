@@ -1,5 +1,6 @@
 """Camada de serviço para operações CRUD de Contato."""
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -9,6 +10,9 @@ from sqlalchemy.orm import Session
 from app.models.contato import Contato
 from app.schemas.contato import ContatoCriar, ContatoAtualizar, ContatoPatch
 from app.services._helpers import garantir_unicidade
+
+# Logger nomeado por módulo — TASK-05 (B.1).
+logger = logging.getLogger(__name__)
 
 
 def listar_contatos(
@@ -77,6 +81,7 @@ def buscar_contato(db: Session, id: int) -> Contato:
     stmt = select(Contato).where(Contato.id == id, Contato.deletado_em == None)  # noqa: E711
     contato = db.execute(stmt).scalar_one_or_none()
     if contato is None:
+        logger.warning("contato inexistente acessado id=%s", id)
         raise HTTPException(status_code=404, detail="Contato não encontrado")
     return contato
 
@@ -105,6 +110,8 @@ def criar_contato(db: Session, dados: ContatoCriar, usuario_id: int | None = Non
     db.add(contato)
     db.commit()
     db.refresh(contato)
+    # Log apenas ids/ação — nunca payload bruto (pode conter dados pessoais).
+    logger.info("contato criado id=%s por usuario_id=%s", contato.id, usuario_id)
     return contato
 
 
@@ -135,6 +142,7 @@ def atualizar_contato(
 
     db.commit()
     db.refresh(contato)
+    logger.info("contato atualizado id=%s por usuario_id=%s", contato.id, usuario_id)
     return contato
 
 
@@ -176,6 +184,7 @@ def patch_contato(
 
     db.commit()
     db.refresh(contato)
+    logger.info("contato patch aplicado id=%s por usuario_id=%s", contato.id, usuario_id)
     return contato
 
 
@@ -187,6 +196,7 @@ def excluir_contato(db: Session, id: int) -> None:
     contato = buscar_contato(db, id)
     contato.deletado_em = datetime.now(timezone.utc)
     db.commit()
+    logger.info("contato excluido (soft) id=%s", id)
 
 
 def listar_lixeira(

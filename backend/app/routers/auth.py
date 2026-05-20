@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -7,6 +9,9 @@ from app.schemas.auth import LoginRequest, TokenResponse
 from app.schemas.usuario import UsuarioResposta
 from app.services.auth_service import criar_token
 from app.services.usuario_service import autenticar_usuario
+
+# Logger nomeado por módulo — TASK-05 (B.1).
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
@@ -20,6 +25,12 @@ async def login(request: Request, dados: LoginRequest, db: Session = Depends(get
     """
     usuario = autenticar_usuario(db, dados.email, dados.senha)
     if usuario is None:
+        # NÃO logar o email aqui para evitar enumeração de usuários em logs.
+        # O middleware já registra a tentativa via método/rota/status.
+        logger.warning("login falhou: credenciais inválidas")
+        # Mantemos HTTPException(401) porque precisamos do header WWW-Authenticate
+        # (RFC 7235); a hierarquia de domínio AuthenticationError não carrega
+        # headers customizados. Status code e payload visível permanecem idênticos.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="E-mail ou senha inválidos.",
@@ -28,6 +39,7 @@ async def login(request: Request, dados: LoginRequest, db: Session = Depends(get
 
     # O campo 'sub' (subject) do JWT armazena o e-mail como identificador
     token = criar_token(data={"sub": usuario.email})
+    logger.info("login realizado usuario_id=%s", usuario.id)
     return TokenResponse(access_token=token)
 
 

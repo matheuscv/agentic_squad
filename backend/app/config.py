@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     database_url: str = "sqlite:///./contatos.db"
+    # Ambiente de execução: "development" (logs texto) ou "production" (logs JSON).
+    # Lido da variável de ambiente ENV; default conservador para DEV.
+    env: str = "development"
 
 
 # Instância global — importar de outros módulos com: from app.config import settings

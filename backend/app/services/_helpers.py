@@ -18,11 +18,15 @@ tanto a partir de routers quanto a partir de services unitários (sem o
 contexto de request do FastAPI), facilitando os testes.
 """
 
+import logging
 from typing import Type, TypeVar
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+# Logger nomeado por módulo — TASK-05 (B.1). Adicionado sem mudar comportamento.
+logger = logging.getLogger(__name__)
 
 # Tipo genérico para o model SQLAlchemy passado como argumento.
 # Mantém a assinatura tipada sem amarrar o helper a um modelo concreto.
