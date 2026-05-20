@@ -11,8 +11,13 @@ class Contato(Base):
     __tablename__ = "contatos"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    nome: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    # Índices em colunas de busca/ordenação (RF-06 C.6 — TASK-19):
+    # `nome`, `email` e `criado_em` são usados em LIKE/=, ORDER BY e filtros.
+    # Observação: `email` já tem `unique=True` (índice único implícito); manter
+    # `index=True` explícito atende ao escopo da task — a migration cria o índice
+    # nomeado `ix_contatos_email` que coexiste com o índice único da constraint.
+    nome: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     telefone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     empresa: Mapped[str | None] = mapped_column(String(255), nullable=True)
     observacoes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -20,6 +25,7 @@ class Contato(Base):
         DateTime,
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime,

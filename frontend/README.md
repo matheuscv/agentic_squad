@@ -58,3 +58,19 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - **adm** — CRUD completo: pode criar, editar e excluir contatos. Promoção para adm é feita diretamente no banco (ver `backend/README.md`).
 
 Páginas restritas redirecionam para `/login` quando o usuário não está autenticado, e exibem erro 403 quando o perfil não tem permissão suficiente.
+
+---
+
+## Análise estática de segurança (eslint-plugin-security)
+
+O frontend usa o [eslint-plugin-security](https://github.com/eslint-community/eslint-plugin-security) para detectar padrões inseguros em código TypeScript/JavaScript (uso de `eval`, regex inseguro, injeção de objeto, etc.).
+
+**Executar localmente:**
+
+```bash
+npm run lint:security
+```
+
+**Critério de falha:** qualquer warning das regras `security/*` (script roda com `--max-warnings=0`).
+
+A configuração está em `frontend/.eslintrc.json` (extende `plugin:security/recommended-legacy`).

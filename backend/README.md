@@ -34,6 +34,27 @@ Meta de cobertura: >= 80%.
 
 ---
 
+## Análise estática de segurança (Bandit)
+
+O backend usa [Bandit](https://bandit.readthedocs.io/) para detectar padrões inseguros em código Python (uso de `eval`, `exec`, hashes fracos, SQL por concatenação, etc.).
+
+**Executar localmente:**
+
+```bash
+bandit -c .bandit -r app/
+```
+
+**Falha do CI:** findings com severidade `MEDIUM` ou `HIGH` quebram o pipeline.
+
+```bash
+# Comando exato usado pelo CI (não falha em findings LOW)
+bandit -c .bandit -r app/ --severity-level medium --confidence-level medium
+```
+
+Configuração em `backend/.bandit`. Diretórios excluídos: `tests/` e `alembic/versions/`.
+
+---
+
 ## Variáveis de ambiente
 
 O arquivo `.env` na raiz de `backend/` deve conter:

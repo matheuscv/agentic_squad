@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.usuario import Usuario
@@ -8,7 +9,9 @@ from app.services.auth_service import hash_senha, verificar_senha
 
 def buscar_por_email(db: Session, email: str) -> Usuario | None:
     """Retorna o usuário com o e-mail informado ou None se não encontrado."""
-    return db.query(Usuario).filter(Usuario.email == email).first()
+    # Padrão SQLAlchemy 2.0: select() + db.scalars() para retorno do modelo
+    stmt = select(Usuario).where(Usuario.email == email)
+    return db.scalars(stmt).first()
 
 
 def criar_usuario(db: Session, dados: UsuarioCriar) -> Usuario:

@@ -1,0 +1,15 @@
+; Configuração do Bandit — análise estática de segurança para Python.
+; Documentação oficial: https://bandit.readthedocs.io/
+;
+; Critério de falha (CI): findings de severidade MEDIUM ou HIGH.
+; Executar localmente: bandit -c .bandit -r app/
+;
+; Exclusões:
+;   - tests/             — testes unitários frequentemente usam fixtures/mocks que
+;                          o bandit sinaliza como falsos positivos (assert, hash MD5
+;                          em fixtures fake, etc.).
+;   - alembic/versions/  — arquivos de migration auto-gerados.
+
+[bandit]
+exclude_dirs = ["tests", "alembic/versions"]
+skips = []

@@ -27,7 +27,9 @@ interface ContatoTableProps {
 }
 
 // Skeleton de linha para estado de carregamento (6 colunas: Nome, E-mail, Empresa, Data, Telefone, Ações)
-function SkeletonRow() {
+// TASK-16: envolvido em React.memo — o componente não recebe props e seu output é estático,
+// portanto pode ser reutilizado entre renders sem reconciliação adicional.
+const SkeletonRow = React.memo(function SkeletonRow() {
   return (
     <tr>
       {[...Array(6)].map((_, i) => (
@@ -37,7 +39,7 @@ function SkeletonRow() {
       ))}
     </tr>
   )
-}
+})
 
 export default function ContatoTable({
   contatos,
@@ -72,6 +74,17 @@ export default function ContatoTable({
     if (sortOrder === 'asc') return <ArrowUp size={14} className="inline ml-1 text-blue-500" />
     return <ArrowDown size={14} className="inline ml-1 text-blue-500" />
   }
+
+  // TASK-16: memoizar a lista de contatos exibida.
+  // A ordenação efetiva acontece no backend (sort_by/sort_order — TASK-01/TASK-05),
+  // por isso este useMemo apenas estabiliza a referência do array entre renders quando
+  // `contatos`, `sortBy` e `sortOrder` não mudam. Mantém-se a ordem visual atual sem
+  // reordenar em memória (RN-F2-01). As dependências são exatamente as que afetam a
+  // ordem dos itens; nada externo é incluído.
+  const contatosOrdenados = React.useMemo(
+    () => [...contatos],
+    [contatos, sortBy, sortOrder],
+  )
 
   // Cálculos de paginação
   const totalPaginas = Math.ceil(totalRegistros / limite)
@@ -152,9 +165,9 @@ export default function ContatoTable({
             </tr>
           )}
 
-          {/* Linhas de dados */}
+          {/* Linhas de dados — usa o array memoizado (TASK-16) */}
           {!loading &&
-            contatos.map((contato) => (
+            contatosOrdenados.map((contato) => (
               <tr
                 key={contato.id}
                 className="cursor-pointer hover:bg-gray-50 transition-colors"

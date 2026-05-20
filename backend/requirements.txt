@@ -4,6 +4,7 @@ sqlalchemy>=2.0
 alembic
 pydantic>=2.0
 pydantic-settings
+email-validator>=2.0
 python-jose[cryptography]
 bcrypt
 pytest
@@ -11,3 +12,4 @@ pytest-cov
 httpx
 python-multipart
 slowapi>=0.1.9
+bandit>=1.7.5

@@ -988,3 +988,597 @@ projeto/
 | RF-F3.2-01   | TASK-11 |
 | RF-F3.2-02   | TASK-12 |
 | RF-F3.2-03   | TASK-13 |
+
+---
+
+## Fase 4 — FASE C — Qualidade de Código e Arquitetura
+
+> Fase de **redução de dívida técnica**: refatoração de componentes, modernização da API SQLAlchemy (1.x → 2.0), criação de hooks/helpers reutilizáveis, otimização de queries via índices, elevação da cobertura de testes do frontend (≥ 60%) e introdução de linters de segurança no pipeline.
+>
+> A FASE C **não altera contratos públicos** (REST API, payloads, UI visível) e **não introduz novas funcionalidades**. Todos os testes existentes devem continuar passando.
+>
+> Organização em três sub-fases para isolar conflitos de arquivo:
+> - **Sub-fase C.1 — Frontend Refactor + Linters**: TASK-14, TASK-15, TASK-16, TASK-21 (paralelas entre si).
+> - **Sub-fase C.2 — SQLAlchemy 2.0 (exclusiva)**: TASK-17 (sozinha — toca todos routers/services).
+> - **Sub-fase C.3 — Backend Helpers + Índices**: TASK-18, TASK-19 (paralelas entre si).
+> - **Sub-fase C.4 — Testes Frontend (final)**: TASK-20 (depende de TASK-14, TASK-15, TASK-16).
+
+---
+
+### Sub-fase C.1 — Frontend Refactor + Linters de Segurança
+
+> Tasks de frontend que tocam arquivos disjuntos + introdução de linters (sem conflito com nenhum outro arquivo). As quatro tasks abaixo podem ser executadas **em paralelo** por DEVs distintos.
+
+---
+
+- **TASK-14** [paralelo: ✅ com TASK-15, TASK-16, TASK-21] — Frontend: Quebra do ContatoForm.tsx (hook + 3 componentes de campo)
+
+  - **Arquivos a criar**:
+    - `frontend/src/hooks/useContatoFormValidation.ts`
+    - `frontend/src/components/form/InputField.tsx`
+    - `frontend/src/components/form/SelectField.tsx`
+    - `frontend/src/components/form/TextAreaField.tsx`
+
+  - **Arquivos a modificar**:
+    - `frontend/src/components/ContatoForm.tsx`
+
+  - **Requisitos atendidos**: RF-01 (C.1)
+
+  - **Descrição**:
+
+    O componente `ContatoForm.tsx` está com 377 linhas e mistura validação, máscara, renderização e estado de campos. Esta task extrai responsabilidades em um hook e três componentes reutilizáveis.
+
+    1. **`frontend/src/hooks/useContatoFormValidation.ts`** — Criar hook de validação:
+       - Extrair toda a lógica de validação de campos (regex de telefone, e-mail, obrigatórios) que hoje vive dentro de `ContatoForm.tsx`.
+       - Assinatura sugerida:
+         ```typescript
+         export function useContatoFormValidation(values: ContatoFormData): {
+           errors: Partial<Record<keyof ContatoFormData, string>>
+           isValid: boolean
+         }
+         ```
+       - Se o componente atual já usa `react-hook-form` + `zodResolver` (da TASK-13), o hook deve apenas **encapsular** o `useForm` + `zodResolver(contatoSchema)` e expor `register`, `handleSubmit`, `formState`, `reset` — mantendo `isDirty` acessível para integração com `useBeforeUnload`.
+       - Incluir JSDoc com exemplo de uso (RNF-08).
+
+    2. **`frontend/src/components/form/InputField.tsx`** — Componente de input genérico:
+       - Props:
+         ```typescript
+         interface InputFieldProps {
+           label: string
+           name: string
+           type?: "text" | "email" | "tel" | "password"
+           placeholder?: string
+           error?: string
+           mask?: string  // opcional, para integração com react-input-mask quando aplicável
+           register?: any  // saída de react-hook-form .register()
+         }
+         ```
+       - Renderiza `<label>` + `<input>` + mensagem de erro condicional.
+       - Estilo Tailwind alinhado ao padrão atual do `ContatoForm` (mesmas classes).
+
+    3. **`frontend/src/components/form/SelectField.tsx`** — Componente de select genérico:
+       - Props similares ao `InputField`, com `options: Array<{ value: string; label: string }>`.
+
+    4. **`frontend/src/components/form/TextAreaField.tsx`** — Componente de textarea:
+       - Props similares ao `InputField`, com `rows?: number` (default 4).
+
+    5. **`frontend/src/components/ContatoForm.tsx`** — Refatorar:
+       - Importar e usar `useContatoFormValidation`, `InputField`, `SelectField`, `TextAreaField`.
+       - Remover toda a lógica de validação inline (já foi para o hook).
+       - Substituir os `<input>` / `<select>` / `<textarea>` puros pelos novos componentes.
+       - **Meta de linhas**: arquivo final entre **150 e 180 linhas** (RF-01).
+       - **Não alterar** o comportamento observável: validações, máscaras, submit, integração com `useBeforeUnload`/`UnsavedChangesModal`.
+
+  - **Critério de pronto**:
+    - Existem os 4 arquivos novos: hook + 3 componentes em `frontend/src/components/form/`.
+    - `ContatoForm.tsx` tem entre 150 e 180 linhas (`wc -l` confirma).
+    - Nenhum `<input>` / `<select>` / `<textarea>` cru permanece em `ContatoForm.tsx` — todos passam pelos novos componentes.
+    - Todos os testes Jest existentes que cobrem `ContatoForm` continuam passando (ou atualizados para usar `getByRole`/`getByLabelText`).
+    - `npx tsc --noEmit` sem erros.
+    - Hook e componentes contêm JSDoc com exemplo de uso.
+
+---
+
+- **TASK-15** [paralelo: ✅ com TASK-14, TASK-16, TASK-21] — Frontend: Hook useDebounce reutilizável
+
+  - **Arquivos a criar**:
+    - `frontend/src/hooks/useDebounce.ts`
+
+  - **Arquivos a modificar**:
+    - `frontend/src/app/contatos/page.tsx`
+
+  - **Requisitos atendidos**: RF-02 (C.2)
+
+  - **Descrição**:
+
+    1. **`frontend/src/hooks/useDebounce.ts`** — Criar hook genérico:
+       ```typescript
+       /**
+        * Retorna o valor `value` após `delay` ms sem mudanças.
+        * Útil para debouncing de campos de busca.
+        *
+        * @example
+        * const termoDebounced = useDebounce(termoBusca, 400)
+        * useEffect(() => { listar(termoDebounced) }, [termoDebounced])
+        */
+       export function useDebounce<T>(value: T, delay: number): T
+       ```
+       Implementação típica com `useState` + `useEffect` + `setTimeout`/`clearTimeout` na cleanup do effect.
+
+    2. **`frontend/src/app/contatos/page.tsx`**:
+       - Localizar o debounce ad-hoc atual (provavelmente usando `useRef` + `setTimeout` para a busca).
+       - Substituir pela chamada `const termoBusca = useDebounce(termoBuscaInput, 400)` (ajustar nome conforme variáveis existentes).
+       - Remover o código antigo de debounce (refs, timers manuais).
+       - **Não alterar** o comportamento observável: latência da busca, paginação, ordenação, reset de filtros.
+       - Se a TASK-15 e a TASK-20 forem ambas executadas, atenção: TASK-20 escreve testes para a paginação/busca desta página — sequenciar para que os testes sejam escritos após esta refatoração estar mergeada.
+
+  - **Critério de pronto**:
+    - `frontend/src/hooks/useDebounce.ts` existe, tipado genericamente, com JSDoc + exemplo.
+    - `app/contatos/page.tsx` usa `useDebounce` em vez de `useRef` + `setTimeout`.
+    - Comportamento de busca idêntico ao anterior (mesmo delay efetivo).
+    - `npx tsc --noEmit` sem erros.
+    - Testes existentes de `app/contatos/page.tsx` continuam passando.
+
+---
+
+- **TASK-16** [paralelo: ✅ com TASK-14, TASK-15, TASK-21] — Frontend: Memoização estratégica em ContatoTable
+
+  - **Arquivos a modificar**:
+    - `frontend/src/components/ContatoTable.tsx`
+
+  - **Requisitos atendidos**: RF-03 (C.3)
+
+  - **Descrição**:
+
+    1. **`frontend/src/components/ContatoTable.tsx`**:
+
+       a. Localizar o subcomponente `SkeletonRow` (renderizado durante loading). Envolvê-lo em `React.memo`:
+          ```typescript
+          const SkeletonRow = React.memo(function SkeletonRow() {
+            return <tr>...</tr>
+          })
+          ```
+
+       b. Localizar a lógica de ordenação dos contatos (array `.sort()` ou função de comparação aplicada na renderização). Envolver em `useMemo`:
+          ```typescript
+          const contatosOrdenados = useMemo(
+            () => [...contatos].sort(...),
+            [contatos, sortBy, sortOrder]
+          )
+          ```
+          Garantir que as **dependências sejam exatamente** as que afetam a ordem (não incluir variáveis externas que não impactam).
+
+       c. **Não alterar**:
+          - Ordem visual atual.
+          - Props recebidas pelo componente.
+          - Comportamento de ordenação por header (TASK-05).
+          - Ícones de ação (TASK-03).
+          - Mensagem de lista vazia (TASK-04).
+
+  - **Critério de pronto**:
+    - `SkeletonRow` está envolvido em `React.memo` (visível no diff).
+    - O array de contatos ordenados é produzido por um `useMemo` com array de dependências correto.
+    - React DevTools (manual) mostra `SkeletonRow` como memoizado.
+    - Nenhuma regressão visual: tabela renderiza identicamente.
+    - `npx tsc --noEmit` sem erros.
+    - Testes existentes de `ContatoTable` continuam passando.
+
+---
+
+- **TASK-21** [paralelo: ✅ com TASK-14, TASK-15, TASK-16] — Qualidade: Linters de segurança (bandit + eslint-plugin-security)
+
+  - **Arquivos a criar**:
+    - `backend/.bandit` (configuração do bandit — formato INI ou YAML)
+    - `frontend/.eslintrc.security.js` (ou apenas estender o `.eslintrc` existente com o plugin — escolher conforme estrutura atual)
+    - `.github/workflows/security.yml` (job de CI dedicado — opcional se já houver workflow consolidado; nesse caso, apenas adicionar steps)
+
+  - **Arquivos a modificar**:
+    - `backend/requirements.txt` (adicionar `bandit`)
+    - `frontend/package.json` (adicionar `eslint-plugin-security` em devDependencies)
+    - `frontend/.eslintrc.json` ou `frontend/.eslintrc.js` (adicionar `"plugin:security/recommended"` em `extends`)
+    - `backend/README.md` (mini-seção com comando `bandit -c .bandit -r app/`)
+    - `frontend/README.md` (mini-seção com comando `npm run lint:security`)
+
+  - **Requisitos atendidos**: RF-08 (C.8)
+
+  - **Descrição**:
+
+    Esta task **não toca código de produção** — apenas configuração de ferramentas. Por isso é segura para rodar em paralelo com qualquer outra task.
+
+    1. **Backend (bandit)**:
+
+       a. Adicionar em `backend/requirements.txt`:
+          ```
+          bandit>=1.7.5
+          ```
+
+       b. Criar `backend/.bandit` (formato INI):
+          ```ini
+          [bandit]
+          exclude_dirs = ["tests", "alembic/versions"]
+          skips = []
+          ```
+          (Excluir testes e migrations geradas; manter todos os checks ativados.)
+
+       c. Documentar no `backend/README.md` a seção "Análise estática de segurança":
+          - Comando local: `bandit -c .bandit -r app/`
+          - Critério de falha: severidade `MEDIUM` ou `HIGH`.
+
+       d. Rodar **uma varredura prévia** em base limpa e listar findings encontrados. Se houver findings `MEDIUM`/`HIGH` em código legado, criar arquivo `backend/.bandit.baseline.json` (output do `bandit --baseline`) e referenciá-lo no `.bandit` para não travar build no dia 1 (mitigação do risco R-04 do PRD). Cada item do baseline deve ter comentário com justificativa.
+
+    2. **Frontend (eslint-plugin-security)**:
+
+       a. Instalar:
+          ```bash
+          npm install --save-dev eslint-plugin-security
+          ```
+
+       b. No `.eslintrc.*` do frontend, adicionar:
+          ```json
+          {
+            "plugins": ["security"],
+            "extends": ["...existing", "plugin:security/recommended"]
+          }
+          ```
+
+       c. Adicionar script em `frontend/package.json`:
+          ```json
+          "scripts": {
+            "lint:security": "eslint . --ext .ts,.tsx --max-warnings=0"
+          }
+          ```
+
+       d. Documentar no `frontend/README.md`: comando `npm run lint:security`, critério de falha (qualquer warning `security/*` de severidade ≥ médio).
+
+       e. Rodar prévia e silenciar/corrigir findings legados antes de ligar o gate (R-04).
+
+    3. **CI Gate**:
+       - Adicionar steps no workflow de CI existente (ou criar `.github/workflows/security.yml`) para:
+         - Backend: `bandit -c backend/.bandit -r backend/app/ --severity-level medium --confidence-level medium` (exit ≠ 0 falha o job).
+         - Frontend: `npm --prefix frontend run lint:security` (exit ≠ 0 falha o job).
+       - Garantir que o job é obrigatório no branch protection do `master`.
+
+    4. **Não criar** pre-commit hook nesta task — fica para Fase E.5 (fora de escopo, ver PRD seção 11).
+
+  - **Critério de pronto**:
+    - `bandit -c backend/.bandit -r backend/app/` roda localmente sem findings novos de `MEDIUM`/`HIGH` (ou todos suprimidos via baseline justificado).
+    - `npm --prefix frontend run lint:security` roda sem erros.
+    - Pipeline de CI tem jobs `backend-security` e `frontend-security` configurados.
+    - Ambos os READMEs (`backend/README.md` e `frontend/README.md`) documentam os comandos.
+    - PR de teste com `eval()` adicionado ao código falha o CI (sanity check manual).
+    - Nenhuma alteração em código de produção (somente config + dependências + docs).
+
+---
+
+### Sub-fase C.2 — Migração SQLAlchemy 2.0 (exclusiva — sem paralelismo)
+
+> Esta sub-fase contém **apenas TASK-17**. A migração `db.query()` → `select()` toca **todos** os routers e services do backend, criando conflito potencial com qualquer outra task de backend. Portanto, esta task **roda sozinha**, entre a Sub-fase C.1 e a Sub-fase C.3.
+
+---
+
+- **TASK-17** [paralelo: ❌ — exclusiva] — Backend: Migração SQLAlchemy 1.x → 2.0 (todos os routers e services)
+
+  - **Arquivos a modificar** (lista exaustiva esperada):
+    - `backend/app/routers/contatos.py`
+    - `backend/app/routers/usuarios.py`
+    - `backend/app/routers/auth.py`
+    - `backend/app/services/contato_service.py`
+    - `backend/app/services/usuario_service.py` (se existir)
+    - Quaisquer outros arquivos em `backend/app/routers/` e `backend/app/services/` que contenham `db.query(`.
+
+  - **Requisitos atendidos**: RF-04 (C.4)
+
+  - **Descrição**:
+
+    Padronizar **toda** a camada de acesso a dados para a API SQLAlchemy 2.0 baseada em `select()` + `db.execute()` / `db.scalars()`. **Não alterar comportamento observável** — esta é uma migração mecânica de padrão.
+
+    1. **Padrão antigo (1.x) a ser substituído**:
+       ```python
+       contatos = db.query(Contato).filter(Contato.email == email).all()
+       contato = db.query(Contato).filter(Contato.id == id).first()
+       total = db.query(Contato).count()
+       ```
+
+    2. **Padrão novo (2.0) a ser adotado**:
+       ```python
+       from sqlalchemy import select, func
+
+       stmt = select(Contato).where(Contato.email == email)
+       contatos = db.scalars(stmt).all()
+
+       stmt = select(Contato).where(Contato.id == id)
+       contato = db.scalars(stmt).first()  # ou .one_or_none()
+
+       stmt = select(func.count()).select_from(Contato)
+       total = db.scalar(stmt)
+       ```
+
+    3. **Procedimento recomendado** (mitigação do risco R-01):
+
+       a. Buscar todas as ocorrências: `grep -rn "db.query(" backend/app/`. Listar todas em um checklist antes de começar.
+
+       b. Migrar **um arquivo por vez**, na ordem:
+          1. `services/contato_service.py`
+          2. `services/usuario_service.py` (se existir)
+          3. `routers/contatos.py`
+          4. `routers/usuarios.py`
+          5. `routers/auth.py`
+          6. Qualquer outro arquivo restante.
+
+       c. Após cada arquivo migrado, rodar:
+          ```bash
+          pytest -x backend/tests/
+          ```
+          Se algum teste quebrar, investigar (provável diferença em lazy loading ou retorno de tupla vs. escalar) **antes** de prosseguir.
+
+       d. Atenção especial a:
+          - `.all()` em `db.query` retorna `list[Model]`; em `db.execute(select(Model))` retorna `list[Row]` — usar `db.scalars()` em vez de `db.execute()` quando o retorno esperado for o modelo direto.
+          - Joins e `options(joinedload(...))` mantêm a mesma sintaxe.
+          - Subqueries: usar `select().subquery()` em vez de `db.query().subquery()`.
+
+    4. **Validação final**:
+       - `grep -rn "db.query(" backend/app/routers/ backend/app/services/` deve retornar **zero ocorrências**.
+       - `pytest --cov=app` continua com cobertura ≥ 80% (mantida da Fase 3.1).
+       - Nenhum endpoint mudou de contrato (path, payload, status code).
+
+  - **Critério de pronto**:
+    - Zero ocorrências de `db.query(` em `backend/app/routers/` e `backend/app/services/`.
+    - Todos os testes pytest passam (`pytest -x`).
+    - Cobertura backend mantida ≥ 80%.
+    - `EXPLAIN` (manual, opcional) confirma que os planos de query são equivalentes.
+    - Documentação OpenAPI inalterada (diff vazio em `/docs/openapi.json`).
+
+---
+
+### Sub-fase C.3 — Backend: Helpers + Índices
+
+> Duas tasks de backend com **arquivos disjuntos**. TASK-18 toca `services/_helpers.py`, `routers/usuarios.py`, `services/contato_service.py`. TASK-19 toca `models/contato.py` + nova migration. Não há sobreposição. Podem rodar **em paralelo**.
+
+---
+
+- **TASK-18** [paralelo: ✅ com TASK-19] — Backend: Helper de validação de unicidade (DRY do padrão 409)
+
+  - **Arquivos a criar**:
+    - `backend/app/services/_helpers.py`
+
+  - **Arquivos a modificar**:
+    - `backend/app/routers/usuarios.py`
+    - `backend/app/services/contato_service.py`
+
+  - **Requisitos atendidos**: RF-05 (C.5)
+
+  - **Descrição**:
+
+    Eliminar duplicação do padrão "buscar registro por campo único; se existir, levantar HTTP 409 (ou 400, conforme padrão atual)".
+
+    1. **`backend/app/services/_helpers.py`** — Criar helper:
+       ```python
+       from typing import Type, TypeVar
+       from fastapi import HTTPException, status
+       from sqlalchemy import select
+       from sqlalchemy.orm import Session
+
+       T = TypeVar("T")
+
+       def garantir_unicidade(
+           db: Session,
+           model: Type[T],
+           campo: str,
+           valor: str,
+           mensagem: str,
+           status_code: int = status.HTTP_409_CONFLICT,
+           excluir_id: int | None = None,
+       ) -> None:
+           """
+           Verifica se já existe um registro de `model` com `model.<campo> == valor`.
+           Se sim, levanta HTTPException com `status_code` e `mensagem`.
+
+           `excluir_id` permite ignorar um ID específico (útil em updates/PATCH onde o próprio
+           registro já tem o valor que está sendo "revalidado").
+
+           Exemplo:
+               garantir_unicidade(db, Usuario, "email", dados.email,
+                                  "E-mail já cadastrado.", excluir_id=usuario.id)
+           """
+           stmt = select(model).where(getattr(model, campo) == valor)
+           if excluir_id is not None:
+               stmt = stmt.where(getattr(model, "id") != excluir_id)
+           existente = db.scalars(stmt).first()
+           if existente is not None:
+               raise HTTPException(status_code=status_code, detail=mensagem)
+       ```
+       - Incluir docstring com exemplo de uso (RNF-08).
+       - Decidir entre 409 (RESTful clássico) e 400 (padrão atual do projeto) consultando uso existente; manter consistência com o que já é retornado em `usuarios.py`/`contato_service.py` para **não alterar contratos** (RNF-02).
+
+    2. **`backend/app/routers/usuarios.py`**:
+       - Localizar os blocos `if db.query(Usuario).filter(...).first(): raise HTTPException(...)` (no POST de criação e no PUT de atualização).
+       - Substituir por chamadas a `garantir_unicidade(db, Usuario, "email", dados.email, "E-mail já cadastrado.")`.
+       - No PUT, passar `excluir_id=id` para permitir manter o próprio email.
+
+    3. **`backend/app/services/contato_service.py`**:
+       - Localizar o bloco de validação de e-mail único em `criar_contato`, `atualizar_contato` e `patch_contato` (criados nas Fases 3.1/3.2).
+       - Substituir cada um por chamada ao helper.
+       - No PATCH/PUT, passar `excluir_id=contato.id`.
+
+    4. **Atenção**: Se a TASK-17 (SQLAlchemy 2.0) já foi mergeada antes desta, o helper já nasce com `select()` (como acima). Se algum arquivo ainda tem `db.query()`, a TASK-18 **não regride**, mantém o `select()`.
+
+  - **Critério de pronto**:
+    - `backend/app/services/_helpers.py` existe com função `garantir_unicidade` documentada.
+    - `routers/usuarios.py` e `services/contato_service.py` usam o helper — não há mais blocos duplicados de "if existente then raise".
+    - Todos os testes pytest existentes passam (`pytest -x`).
+    - Status codes retornados em respostas (409 ou 400) **idênticos** aos retornados antes da refatoração — testes de contrato confirmam.
+    - `grep -rn "E-mail já" backend/app/routers backend/app/services` mostra a string apenas dentro do helper ou em chamadas a ele.
+
+---
+
+- **TASK-19** [paralelo: ✅ com TASK-18] — Backend: Índices em colunas de busca/ordenação + migration Alembic
+
+  - **Arquivos a criar**:
+    - `backend/alembic/versions/<hash>_add_indices_contatos.py` (nova migration — nome do hash gerado pelo Alembic)
+
+  - **Arquivos a modificar**:
+    - `backend/app/models/contato.py`
+
+  - **Requisitos atendidos**: RF-06 (C.6)
+
+  - **Descrição**:
+
+    Otimização de leitura: adicionar índices nas colunas `nome`, `email`, `criado_em` da tabela `contatos`. Estas colunas são usadas em busca (LIKE/=), ordenação (`ORDER BY`) e filtros.
+
+    1. **`backend/app/models/contato.py`** — Adicionar `index=True`:
+       ```python
+       nome: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+       email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+       criado_em: Mapped[datetime] = mapped_column(
+           DateTime, default=lambda: datetime.now(timezone.utc), index=True
+       )
+       ```
+       - **Não tocar** em outras colunas (`telefone`, `empresa`, `observacoes`, `deletado_em`, `criado_por_id`, `atualizado_por_id`).
+       - Se `email` já tem `unique=True`, ele **já tem índice implícito** — neste caso, **omitir** `index=True` (evita índice duplicado). Confirmar antes de adicionar.
+
+    2. **Migration Alembic** — Gerar:
+       ```bash
+       cd backend
+       alembic revision --autogenerate -m "add_indices_contatos"
+       ```
+       Revisar o arquivo gerado em `backend/alembic/versions/<hash>_add_indices_contatos.py`. Deve conter apenas:
+       ```python
+       def upgrade():
+           op.create_index("ix_contatos_nome", "contatos", ["nome"])
+           op.create_index("ix_contatos_email", "contatos", ["email"])  # se não duplicado
+           op.create_index("ix_contatos_criado_em", "contatos", ["criado_em"])
+
+       def downgrade():
+           op.drop_index("ix_contatos_criado_em", table_name="contatos")
+           op.drop_index("ix_contatos_email", table_name="contatos")
+           op.drop_index("ix_contatos_nome", table_name="contatos")
+       ```
+       Remover qualquer operação destrutiva ou não relacionada que o autogenerate possa incluir.
+
+    3. **Postgres (produção)** — Se o ambiente alvo for Postgres com tabela grande, considerar editar a migration para usar `op.create_index(..., postgresql_concurrently=True)` e `with op.get_context().autocommit_block():` (R-02). Documentar no comentário da migration.
+
+    4. **Validação**:
+       - `alembic upgrade head` aplica sem erro.
+       - `alembic downgrade -1` reverte sem erro.
+       - Em base de teste com ≥ 10k linhas (opcional), executar `EXPLAIN SELECT * FROM contatos WHERE nome LIKE 'Jo%'` e confirmar uso do índice.
+
+  - **Critério de pronto**:
+    - `nome`, `email` (se não-único) e `criado_em` têm `index=True` em `models/contato.py`.
+    - Migration Alembic existe em `backend/alembic/versions/`, autogenerate revisado, sem operações destrutivas.
+    - `alembic upgrade head` + `alembic downgrade -1` rodam sem erro.
+    - Todos os testes pytest passam (índices não quebram queries).
+    - Nenhuma outra coluna do modelo foi alterada (diff cirúrgico em `contato.py`).
+
+---
+
+### Sub-fase C.4 — Testes Frontend (depende de C.1)
+
+> TASK-20 depende de **TASK-14, TASK-15, TASK-16** estarem mergeadas — escreve testes para os componentes refatorados. Não pode rodar em paralelo com C.1.
+
+---
+
+- **TASK-20** [paralelo: ❌ — depende de TASK-14, TASK-15, TASK-16] — Frontend: Elevar cobertura Jest para ≥ 60% (login, ContatoForm, paginação/busca, modal unsaved)
+
+  - **Arquivos a criar** (estrutura sugerida; ajustar conforme convenção do projeto):
+    - `frontend/src/__tests__/login.test.tsx` (ou `frontend/src/app/login/__tests__/page.test.tsx`)
+    - `frontend/src/__tests__/contatoForm.test.tsx` (ou `frontend/src/components/__tests__/ContatoForm.test.tsx`)
+    - `frontend/src/__tests__/contatosPage.test.tsx` (paginação e busca)
+    - `frontend/src/__tests__/unsavedChangesModal.test.tsx`
+
+  - **Arquivos a modificar** (se necessário):
+    - `frontend/jest.config.js` (garantir threshold de cobertura ≥ 60% em statements)
+    - `frontend/package.json` (script `test:coverage` se ainda não existir)
+
+  - **Requisitos atendidos**: RF-07 (C.7)
+
+  - **Dependências**: TASK-14 (ContatoForm refatorado), TASK-15 (useDebounce em uso na page de contatos), TASK-16 (ContatoTable memoizado).
+
+  - **Descrição**:
+
+    Escrever testes Jest + React Testing Library cobrindo quatro fluxos críticos. Meta: **cobertura global de statements ≥ 60%** no relatório do Jest.
+
+    1. **`login.test.tsx`** (mínimo 4 testes):
+       - Renderiza campos email/senha e botão.
+       - Submit com email vazio: exibe mensagem do Zod "E-mail inválido." (TASK-13).
+       - Submit com senha < 6 chars: exibe mensagem "A senha deve ter pelo menos 6 caracteres.".
+       - Submit com credenciais válidas: chama `fetch`/service mockado e navega para `/contatos` (usar `jest.fn()` para o router).
+
+    2. **`contatoForm.test.tsx`** (mínimo 6 testes — usa componentes refatorados de TASK-14):
+       - Renderiza todos os campos via `InputField`/`SelectField`/`TextAreaField` (verificar por `getByLabelText`).
+       - Campo obrigatório vazio bloqueia submit.
+       - Telefone com formato inválido exibe mensagem do `contatoSchema`.
+       - Telefone vazio é aceito (campo opcional).
+       - Modificar campo seta `isDirty=true` (validar via efeito observável).
+       - Submit bem-sucedido chama `onSubmit` mock e reseta `isDirty`.
+
+    3. **`contatosPage.test.tsx`** (mínimo 5 testes — depende de TASK-15):
+       - Renderiza lista de contatos mockada e paginação.
+       - Digitar no campo busca aciona debounce (avançar timers com `jest.useFakeTimers()` + `jest.advanceTimersByTime(400)`) e refaz fetch.
+       - Clicar em "próxima página" incrementa o offset enviado à API.
+       - Lista vazia com busca ativa exibe `Nenhum resultado para "<termo>"`.
+       - Lista vazia sem busca exibe "Nenhum contato cadastrado ainda.".
+
+    4. **`unsavedChangesModal.test.tsx`** (mínimo 4 testes):
+       - Modal não renderiza quando `isOpen=false`.
+       - Modal renderiza título e corpo em PT-BR quando `isOpen=true`.
+       - Clicar em "Continuar editando" dispara `onContinue`.
+       - Clicar em "Sair sem salvar" dispara `onLeave`.
+
+    5. **`frontend/jest.config.js`** — Configurar threshold:
+       ```javascript
+       coverageThreshold: {
+         global: {
+           statements: 60,
+           branches: 50,
+           functions: 55,
+           lines: 60,
+         },
+       },
+       ```
+       Build falha automaticamente se a meta não for atingida.
+
+    6. **Scripts**:
+       - Garantir que `npm --prefix frontend run test:coverage` (ou equivalente) gera `coverage/` e log com `Statements: XX%`.
+       - Adicionar ao CI um step que falha se cobertura < 60%.
+
+  - **Critério de pronto**:
+    - Os 4 arquivos de teste existem com no mínimo o número de testes indicado por arquivo.
+    - `npm --prefix frontend run test:coverage` reporta `Statements ≥ 60%`.
+    - Todos os testes passam (zero falhas, zero `.skip` injustificados).
+    - `jest.config.js` tem `coverageThreshold.global.statements >= 60`.
+    - CI verde no job de testes frontend.
+    - Nenhum teste depende de servidor real, banco real, ou faz network real (todos mockam fetch/services).
+
+---
+
+## Resumo de Paralelismo — Fase 4 (FASE C)
+
+| Task    | Sub-fase | Pode rodar em paralelo com           | Dependências                          |
+|---------|----------|--------------------------------------|---------------------------------------|
+| TASK-14 | C.1      | TASK-15, TASK-16, TASK-21            | nenhuma                               |
+| TASK-15 | C.1      | TASK-14, TASK-16, TASK-21            | nenhuma                               |
+| TASK-16 | C.1      | TASK-14, TASK-15, TASK-21            | nenhuma                               |
+| TASK-21 | C.1      | TASK-14, TASK-15, TASK-16            | nenhuma (só config)                   |
+| TASK-17 | C.2      | nenhuma (toca todos routers/services)| recomendado após C.1                  |
+| TASK-18 | C.3      | TASK-19                              | TASK-17 (preferencial)                |
+| TASK-19 | C.3      | TASK-18                              | nenhuma                               |
+| TASK-20 | C.4      | nenhuma                              | TASK-14, TASK-15, TASK-16             |
+
+> **Grupos de paralelismo confirmados na FASE C**:
+> - **Grupo D (Sub-fase C.1)**: TASK-14, TASK-15, TASK-16, TASK-21 — 4 tasks em paralelo, arquivos totalmente disjuntos. Esta é a sub-fase com **maior paralelismo** da FASE C.
+> - **Grupo E (Sub-fase C.3)**: TASK-18 e TASK-19 — 2 tasks em paralelo, arquivos disjuntos.
+
+---
+
+## Requisitos Cobertos — Fase 4 (FASE C)
+
+| Requisito | Task     |
+|-----------|----------|
+| RF-01     | TASK-14  |
+| RF-02     | TASK-15  |
+| RF-03     | TASK-16  |
+| RF-04     | TASK-17  |
+| RF-05     | TASK-18  |
+| RF-06     | TASK-19  |
+| RF-07     | TASK-20  |
+| RF-08     | TASK-21  |

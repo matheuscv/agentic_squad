@@ -26,20 +26,8 @@ IDEIA DO USUÁRIO (substitua entre as aspas antes de rodar):
 Agora precisaremos evoluir este projeto com algumas melhorias e novas funcionalidades. O plano será 
 feito em fases, e abaixo segue o escopo a ser considerado para a fase atual.
 
-Fase 3.2 — Qualidade e segurança
 
-3.4 Auditoria básica (quem criou/modificou)
-Adicionar criado_por_id e atualizado_por_id (FK → Usuario) na tabela Contato. Popular 
-automaticamente via dependency require_adm.
-
-3.5 Rate limiting na API
-Usar slowapi (FastAPI-compatible) para limitar POST /auth/login (ex: 5 req/min por IP) 
-e prevenir ataques de força bruta.
-
-3.6 Validação robusta no frontend com Zod
-Substituir regex manuais por schemas Zod em todos os formulários (login, cadastro, contato). 
-Melhora mensagens de erro e type-safety.
-
+Busque no arquivo melhorias_v2.html dentro do diretório /docs/release_notes e se organize para implementar as fases: B.1, B.2 apenas.
 
 
 ═══════════════════════════════════════════════════════════════════

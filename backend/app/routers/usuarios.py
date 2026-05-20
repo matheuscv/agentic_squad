@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,6 +11,7 @@ from app.schemas.usuario import (
     UsuarioCriar,
     UsuarioResposta,
 )
+from app.services._helpers import garantir_unicidade
 from app.services.usuario_service import criar_usuario
 
 router = APIRouter(prefix="/usuarios", tags=["Usuários"])
@@ -60,7 +62,8 @@ def listar_usuarios(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso restrito a administradores.",
         )
-    return db.query(Usuario).all()
+    # Padrão SQLAlchemy 2.0: select() + db.scalars() retorna list[Usuario]
+    return db.scalars(select(Usuario)).all()
 
 
 # ---------------------------------------------------------------------------
@@ -118,17 +121,16 @@ def atualizar_usuario(
         usuario.nome = dados.nome
 
     if dados.email is not None:
-        # Verificar unicidade: ignorar o próprio registro na comparação
-        conflito = (
-            db.query(Usuario)
-            .filter(Usuario.email == dados.email, Usuario.id != usuario_id)
-            .first()
+        # Verificar unicidade: ignorar o próprio registro na comparação (excluir_id).
+        # Mantém status 400 e mensagem históricas para não quebrar contratos (RNF-02).
+        garantir_unicidade(
+            db,
+            Usuario,
+            "email",
+            dados.email,
+            "Este e-mail já está em uso por outro usuário.",
+            excluir_id=usuario_id,
         )
-        if conflito:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Este e-mail já está em uso por outro usuário.",
-            )
         usuario.email = dados.email
 
     db.commit()

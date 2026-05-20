@@ -36,6 +36,11 @@ htmlcov/
 # Claude local settings
 .claude/settings.local.json
 */.claude/settings.local.json
+**/.claude/worktrees/
+
+# Coverage output (Jest, pytest, etc.)
+coverage/
+**/coverage/
 
 # Node / Next.js
 node_modules/

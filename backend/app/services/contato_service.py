@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.contato import Contato
 from app.schemas.contato import ContatoCriar, ContatoAtualizar, ContatoPatch
+from app.services._helpers import garantir_unicidade
 
 
 def listar_contatos(
@@ -88,13 +89,9 @@ def criar_contato(db: Session, dados: ContatoCriar, usuario_id: int | None = Non
     usuario_id (RF-F3.2-01): id do usuário autenticado que está criando o registro.
     Preenchido em criado_por_id e atualizado_por_id. Pode ser None em contextos de teste/seed.
     """
-    # Verifica duplicidade de e-mail
-    existente = db.execute(
-        select(Contato).where(Contato.email == dados.email)
-    ).scalar_one_or_none()
-
-    if existente is not None:
-        raise HTTPException(status_code=400, detail="E-mail já cadastrado")
+    # Verifica duplicidade de e-mail via helper compartilhado (DRY).
+    # Status 400 e mensagem preservados — qualquer ajuste futuro deve passar pelo helper.
+    garantir_unicidade(db, Contato, "email", dados.email, "E-mail já cadastrado")
 
     contato = Contato(
         nome=dados.nome,
@@ -153,16 +150,17 @@ def patch_contato(
     """
     contato = buscar_contato(db, id)
 
-    # Valida unicidade de e-mail antes de aplicar qualquer mudança
+    # Valida unicidade de e-mail antes de aplicar qualquer mudança.
+    # excluir_id=id preserva o próprio registro ao revalidar o e-mail no PATCH.
     if dados.email is not None:
-        conflito = db.execute(
-            select(Contato).where(
-                Contato.email == dados.email,
-                Contato.id != id,  # exclui o próprio registro da verificação
-            )
-        ).scalar_one_or_none()
-        if conflito is not None:
-            raise HTTPException(status_code=400, detail="E-mail já cadastrado por outro contato")
+        garantir_unicidade(
+            db,
+            Contato,
+            "email",
+            dados.email,
+            "E-mail já cadastrado por outro contato",
+            excluir_id=id,
+        )
 
     # Aplica somente os campos presentes no body (não-None)
     campos_atualizaveis = ("nome", "email", "telefone", "empresa", "observacoes")

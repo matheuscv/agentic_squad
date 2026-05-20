@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useRef, ChangeEvent } from 'react'
+import React, { useState, useEffect, useRef, ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Contato } from '../../types/index'
 import { useAuth } from '../../hooks/useAuth'
+import { useDebounce } from '../../hooks/useDebounce'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import ContatoTable from '../../components/ContatoTable'
 import ConfirmacaoModal from '../../components/ConfirmacaoModal'
@@ -30,9 +31,10 @@ function ContatosPageContent() {
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
-  // Campo de busca + debounce
+  // Campo de busca: o estado bruto reflete o input do usuário em tempo real.
+  // O valor "debounced" (400 ms de inatividade) é o que dispara chamadas à API.
   const [busca, setBusca] = useState('')
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const buscaDebounced = useDebounce(busca, 400)
 
   // Paginação
   const [paginaAtual, setPaginaAtual] = useState(1)
@@ -52,17 +54,36 @@ function ContatosPageContent() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ------------------------------------------------------------------
-  // Carregamento inicial e ao mudar de página ou ordenação
+  // Efeito único de carregamento.
+  //
+  // Sempre que `buscaDebounced`, `paginaAtual`, `sortBy` ou `sortOrder`
+  // mudam, recarrega a lista. Se a mudança foi no termo debounced
+  // (detectado via ref), também reseta página e ordenação para o padrão
+  // — mas usando os valores resetados na PRÓPRIA chamada à API, evitando
+  // a request intermediária com estado obsoleto.
   // ------------------------------------------------------------------
+  const buscaDebouncedAnteriorRef = useRef<string>(buscaDebounced)
   useEffect(() => {
-    carregarContatos(busca, paginaAtual, sortBy, sortOrder)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paginaAtual, sortBy, sortOrder])
+    const buscaMudou = buscaDebouncedAnteriorRef.current !== buscaDebounced
+    buscaDebouncedAnteriorRef.current = buscaDebounced
 
-  // Limpa timers ao desmontar para evitar memory leaks
+    if (buscaMudou) {
+      // Reset declarativo: garante que os próximos renders enxerguem o padrão.
+      setPaginaAtual(1)
+      setSortBy('nome')
+      setSortOrder('asc')
+      // Carrega imediatamente com os valores resetados, evitando uma chamada
+      // intermediária com paginaAtual/sortBy/sortOrder antigos.
+      carregarContatos(buscaDebounced, 1, 'nome', 'asc')
+    } else {
+      carregarContatos(buscaDebounced, paginaAtual, sortBy, sortOrder)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paginaAtual, sortBy, sortOrder, buscaDebounced])
+
+  // Limpa timer do toast ao desmontar para evitar memory leaks.
   useEffect(() => {
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
   }, [])
@@ -89,26 +110,13 @@ function ContatosPageContent() {
   }
 
   // ------------------------------------------------------------------
-  // Campo de busca com debounce de 400 ms
+  // Campo de busca: apenas reflete o input do usuário no estado.
+  // O debounce (400 ms) é aplicado pelo hook useDebounce; o reset de
+  // página/ordenação e a chamada à API acontecem nos useEffects acima.
   // ------------------------------------------------------------------
-  const handleBuscaChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const valor = e.target.value
-      setBusca(valor)
-
-      // Cancela o timeout anterior antes de criar um novo (debounce real)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-
-      debounceRef.current = setTimeout(() => {
-        // Ao mudar o filtro, reseta página e ordenação, depois carrega
-        setPaginaAtual(1)
-        setSortBy('nome')
-        setSortOrder('asc')
-        carregarContatos(valor, 1, 'nome', 'asc')
-      }, 400)
-    },
-    []
-  )
+  function handleBuscaChange(e: ChangeEvent<HTMLInputElement>) {
+    setBusca(e.target.value)
+  }
 
   // ------------------------------------------------------------------
   // Handlers de paginação

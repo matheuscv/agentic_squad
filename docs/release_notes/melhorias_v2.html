@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Melhorias v2 — Squad Agentes</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      border-radius: 12px;
+      padding: 2rem 2.5rem;
+      margin-bottom: 2rem;
+    }
+    header h1 { font-size: 1.8rem; margin-bottom: .4rem; }
+    header .meta { font-size: .85rem; opacity: .75; }
+    header .subtitle { font-size: .9rem; opacity: .85; margin-top: .8rem; line-height: 1.5; }
+    header .version {
+      display: inline-block;
+      background: #4f46e5;
+      color: #fff;
+      border-radius: 20px;
+      padding: .2rem .8rem;
+      font-size: .8rem;
+      font-weight: 600;
+      margin-top: .6rem;
+    }
+
+    .phase {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-left: 5px solid;
+    }
+    .phase-A { border-color: #ef4444; }
+    .phase-B { border-color: #f97316; }
+    .phase-C { border-color: #eab308; }
+    .phase-D { border-color: #22c55e; }
+    .phase-E { border-color: #3b82f6; }
+
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+      flex-wrap: wrap;
+    }
+    .phase-header h2 { font-size: 1.15rem; }
+    .phase-intro {
+      font-size: .88rem;
+      color: #4b5563;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 20px;
+      padding: .2rem .8rem;
+      font-size: .75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge-red    { background: #fee2e2; color: #b91c1c; }
+    .badge-orange { background: #ffedd5; color: #c2410c; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .badge-green  { background: #dcfce7; color: #15803d; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-gray   { background: #e5e7eb; color: #374151; }
+
+    .effort {
+      margin-left: auto;
+      font-size: .8rem;
+      color: #6b7280;
+      white-space: nowrap;
+    }
+
+    .items { list-style: none; }
+    .items li {
+      padding: .9rem 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: .93rem;
+    }
+    .items li:last-child { border-bottom: none; }
+
+    .item-title {
+      font-weight: 600;
+      margin-bottom: .3rem;
+    }
+    .item-detail {
+      color: #4b5563;
+      font-size: .87rem;
+      line-height: 1.55;
+    }
+    .item-meta {
+      display: flex;
+      gap: .8rem;
+      margin-top: .4rem;
+      flex-wrap: wrap;
+    }
+    .item-effort, .item-tag {
+      display: inline-block;
+      font-size: .75rem;
+      color: #6b7280;
+      font-style: italic;
+    }
+    .item-tag.new {
+      background: #ede9fe;
+      color: #5b21b6;
+      padding: .12rem .5rem;
+      border-radius: 4px;
+      font-style: normal;
+      font-weight: 600;
+      font-size: .7rem;
+      letter-spacing: .03em;
+    }
+    .item-tag.from-v1 {
+      background: #f1f5f9;
+      color: #475569;
+      padding: .12rem .5rem;
+      border-radius: 4px;
+      font-style: normal;
+      font-weight: 600;
+      font-size: .7rem;
+      letter-spacing: .03em;
+    }
+
+    code {
+      background: #f1f5f9;
+      color: #7c3aed;
+      border-radius: 4px;
+      padding: .1em .35em;
+      font-size: .85em;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    /* Status v1 */
+    .status-section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .status-section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+    .status-section p.lead {
+      font-size: .9rem;
+      color: #4b5563;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    /* Summary table */
+    .summary-section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .summary-section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .9rem;
+    }
+    thead th {
+      background: #f8fafc;
+      text-align: left;
+      padding: .6rem .8rem;
+      border-bottom: 2px solid #e5e7eb;
+      color: #374151;
+    }
+    tbody td {
+      padding: .65rem .8rem;
+      border-bottom: 1px solid #f3f4f6;
+      color: #4b5563;
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #f9fafb; }
+
+    .status-icon { font-size: 1rem; margin-right: .3rem; }
+
+    /* Recommendation */
+    .rec-section {
+      background: #1a1a2e;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 2rem;
+    }
+    .rec-section h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #fff; }
+    .rec-block { margin-bottom: 1.1rem; }
+    .rec-block:last-child { margin-bottom: 0; }
+    .rec-block h3 { font-size: .88rem; color: #94a3b8; margin-bottom: .4rem; text-transform: uppercase; letter-spacing: .05em; }
+    .rec-block p { font-size: .9rem; line-height: 1.6; }
+
+    footer {
+      text-align: center;
+      font-size: .8rem;
+      color: #9ca3af;
+      padding-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Sugestões de Melhorias — Squad Agentes</h1>
+    <div class="meta">Gerado em 19 de maio de 2026 &nbsp;|&nbsp; Projeto: Contact Management App (FastAPI + Next.js 14)</div>
+    <div class="subtitle">
+      Atualização do roadmap após entrega das Fases 1, 3.1 e 3.2. Consolida <strong>novos achados</strong>
+      identificados na auditoria de código (segurança, observabilidade, qualidade) com as
+      <strong>pendências do v1</strong> ainda não implementadas.
+    </div>
+    <span class="version">v2</span>
+  </header>
+
+  <!-- STATUS DO V1 -->
+  <div class="status-section">
+    <h2>Status das entregas (referência v1)</h2>
+    <p class="lead">
+      Desde a publicação de <code>melhorias_v1.html</code>, três fases foram finalizadas pela squad.
+      As fases 2, 4 e 5 do v1 permanecem pendentes e foram reorganizadas a seguir nas fases D e E.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px;">Status</th>
+          <th>Fase do v1</th>
+          <th>Commit</th>
+          <th>Entregas</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-green">✅ Feito</span></td>
+          <td><strong>Fase 1</strong> — Correções imediatas</td>
+          <td><code>28131df</code></td>
+          <td>Navbar integrada, paginação, toast diferenciado</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-green">✅ Feito</span></td>
+          <td><strong>Fase 3.1</strong> — Qualidade</td>
+          <td><code>5407602</code></td>
+          <td>PATCH parcial, soft delete, lixeira, testes regressivos</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-green">✅ Feito</span></td>
+          <td><strong>Fase 3.2</strong> — Qualidade</td>
+          <td><code>a846de0</code></td>
+          <td>Auditoria <code>criado_por_id</code>/<code>atualizado_por_id</code>, rate limiting, Zod</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-gray">⏳ Pendente</span></td>
+          <td><strong>Fase 2</strong> — UX</td>
+          <td>—</td>
+          <td>Ordenação, CRUD usuários, máscara telefone (movido para Fase D)</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-gray">⏳ Pendente</span></td>
+          <td><strong>Fase 4</strong> — Novas funcionalidades</td>
+          <td>—</td>
+          <td>Filtros, export, import, dashboard, tags (movido para Fase D)</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-gray">⏳ Pendente</span></td>
+          <td><strong>Fase 5</strong> — Infraestrutura</td>
+          <td>—</td>
+          <td>Docker, PostgreSQL, CI/CD, dark mode (movido para Fase E)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- FASE A — SEGURANÇA -->
+  <div class="phase phase-A">
+    <div class="phase-header">
+      <h2>Fase A — Segurança crítica</h2>
+      <span class="badge badge-red">Crítico</span>
+      <span class="effort">~10h estimadas</span>
+    </div>
+    <p class="phase-intro">
+      Vulnerabilidades identificadas em auditoria que devem ser tratadas <strong>antes</strong> de qualquer deploy em produção.
+      Sistemas de adquirência operam em ambiente CDE e estão sujeitos a PCI DSS v4.0.1.
+    </p>
+    <ul class="items">
+      <li>
+        <div class="item-title">A.1 — Migrar JWT de localStorage para httpOnly cookie</div>
+        <div class="item-detail">
+          Hoje o token de acesso é gravado em <code>localStorage</code> em
+          <code>frontend/src/hooks/useAuth.tsx</code> e recuperado pelo interceptor em
+          <code>frontend/src/services/api.ts</code>. Isso expõe a sessão a qualquer script malicioso injetado via XSS.
+          <br>Solução: backend emite cookie <code>Set-Cookie: token=...; HttpOnly; Secure; SameSite=Strict; Path=/</code>;
+          frontend remove o storage do token e passa a depender do envio automático de cookie em cada request.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~3h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">A.2 — Falhar startup com SECRET_KEY fraca em produção</div>
+        <div class="item-detail">
+          <code>backend/app/config.py</code> aceita qualquer valor de <code>SECRET_KEY</code>, inclusive o default <code>dev_*</code>.
+          Em <code>ENV=production</code>, validar entropia mínima (≥ 32 bytes, prefixo diferente de <code>dev_</code>) e abortar o
+          boot com mensagem clara se a validação falhar.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">A.3 — CORS configurável via variável de ambiente</div>
+        <div class="item-detail">
+          Em <code>backend/app/main.py</code> a lista de origens permitidas está hardcoded para <code>http://localhost:3000</code>.
+          Substituir por <code>ALLOWED_ORIGINS</code> (CSV) lido do <code>.env</code>, com fallback seguro para
+          ambiente local apenas.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">A.4 — Rate limit composto (IP + email) no login</div>
+        <div class="item-detail">
+          Em <code>backend/app/routers/auth.py</code> o limite atual de 5 req/min é por IP. Atacantes podem rotacionar IPs
+          ou fazer enumeração de usuários. Acrescentar chave composta <code>{ip}:{email}</code> com limite mais restritivo
+          (ex: 3/min) para reduzir credential stuffing e enumeration.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~2h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">A.5 — Limitar tamanho de payload e hosts confiáveis</div>
+        <div class="item-detail">
+          Adicionar <code>TrustedHostMiddleware</code> com lista de hosts liberados e middleware customizado
+          que rejeite requests com <code>Content-Length</code> acima de um teto (ex: 1 MB para JSON).
+          Mitiga payload bomb e ataques de Host header injection.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~2h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">A.6 — Política de senha forte e bloqueio progressivo</div>
+        <div class="item-detail">
+          Hoje a validação de senha é mínima. Adicionar regras de complexidade (≥ 12 chars, classes mistas) no schema Zod
+          <code>frontend/src/lib/schemas.ts</code> e no Pydantic do backend, mais bloqueio temporário de conta
+          após N falhas consecutivas (ex: 10 minutos após 5 falhas).
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~2h</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE B — OBSERVABILIDADE -->
+  <div class="phase phase-B">
+    <div class="phase-header">
+      <h2>Fase B — Observabilidade e operação</h2>
+      <span class="badge badge-orange">Alto</span>
+      <span class="effort">~12h estimadas</span>
+    </div>
+    <p class="phase-intro">
+      O backend não tem logging estruturado nem captura centralizada de exceções, o que dificulta
+      qualquer investigação de incidente. Esta fase prepara o sistema para operação real.
+    </p>
+    <ul class="items">
+      <li>
+        <div class="item-title">B.1 — Logging estruturado em JSON</div>
+        <div class="item-detail">
+          Adicionar <code>logging.getLogger(__name__)</code> em todos os services e routers.
+          Em produção, configurar handler com formato JSON (ex: <code>python-json-logger</code>) incluindo
+          <code>request_id</code>, <code>user_id</code>, <code>route</code> e <code>duration_ms</code>.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~3h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">B.2 — Tratamento centralizado de exceções</div>
+        <div class="item-detail">
+          Criar <code>backend/app/exceptions.py</code> com hierarquia de exceções de domínio
+          (<code>DomainError</code>, <code>NotFoundError</code>, <code>ConflictError</code>, etc.) e registrar
+          um <code>exception_handler</code> global no FastAPI que converte cada classe em HTTP status apropriado
+          e loga o stack trace. Elimina o <code>except Exception: pass</code> em <code>main.py:36</code>.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~3h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">B.3 — Sentry no backend e frontend</div>
+        <div class="item-detail">
+          Integrar <code>sentry-sdk[fastapi]</code> no backend e <code>@sentry/nextjs</code> no frontend.
+          Configurar sampling e tags de release. Promovido a alto pois é pré-requisito para detectar
+          regressões introduzidas pelas mudanças da Fase A.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (5.4)</span>
+          <span class="item-effort">Esforço: ~2h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">B.4 — Audit log persistente para ações sensíveis</div>
+        <div class="item-detail">
+          Criar tabela <code>audit_log</code> (id, ator_id, acao, recurso, recurso_id, ip, user_agent, payload_hash, timestamp)
+          registrando: login bem-sucedido e falho, criação/exclusão de usuário, mudança de role, soft delete de contato e
+          restore. Complementa o <code>criado_por_id</code>/<code>atualizado_por_id</code> da Fase 3.2.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~3h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">B.5 — Healthcheck e readiness endpoints</div>
+        <div class="item-detail">
+          <code>GET /health/live</code> (200 sempre que o processo está vivo) e
+          <code>GET /health/ready</code> (verifica conexão de banco, migration up-to-date).
+          Pré-requisito para orquestradores (Docker Compose / K8s) na Fase E.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE C — QUALIDADE -->
+  <div class="phase phase-C">
+    <div class="phase-header">
+      <h2>Fase C — Qualidade de código e arquitetura</h2>
+      <span class="badge badge-yellow">Médio</span>
+      <span class="effort">~14h estimadas</span>
+    </div>
+    <p class="phase-intro">
+      Refatorações pontuais que reduzem custo de manutenção e abrem caminho para escala.
+      Nenhum item é bloqueante, mas a dívida cresce a cada nova feature da Fase D.
+    </p>
+    <ul class="items">
+      <li>
+        <div class="item-title">C.1 — Quebrar <code>ContatoForm.tsx</code> (377 linhas)</div>
+        <div class="item-detail">
+          Em <code>frontend/src/components/ContatoForm.tsx</code>, extrair lógica de validação
+          para um hook <code>useContatoFormValidation()</code> e separar campos em
+          <code>InputField</code>, <code>SelectField</code>, <code>TextAreaField</code> reutilizáveis.
+          Alvo: reduzir a componente para ~150–180 linhas.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~3h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">C.2 — Hook <code>useDebounce</code> reutilizável</div>
+        <div class="item-detail">
+          Em <code>frontend/src/app/contatos/page.tsx</code> o debounce de busca está implementado
+          ad-hoc com <code>useRef</code>. Extrair para <code>frontend/src/hooks/useDebounce.ts</code>
+          (assinatura <code>useDebounce(value, delay)</code>) e reutilizar em filtros futuros (Fase D).
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">C.3 — Memoização estratégica em <code>ContatoTable</code></div>
+        <div class="item-detail">
+          O loop de 5 skeleton rows em <code>ContatoTable.tsx</code> re-renderiza a cada update.
+          Envolver <code>SkeletonRow</code> em <code>React.memo</code> e, se necessário,
+          usar <code>useMemo</code> na função de ordenação.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">C.4 — Migrar SQLAlchemy <code>.query()</code> → 2.0 <code>select()</code></div>
+        <div class="item-detail">
+          Vários módulos em <code>backend/app/routers/</code> e <code>backend/app/services/</code> usam
+          o estilo legado <code>db.query(Model)</code>. Padronizar para a API 2.0 (<code>select(Model)</code>)
+          alinhada com a versão das dependências em <code>requirements.txt</code>.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~2h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">C.5 — Helper de validação de unicidade</div>
+        <div class="item-detail">
+          O padrão "buscar por email e levantar 409 se existir" está duplicado entre
+          <code>routers/usuarios.py</code> e <code>services/contato_service.py</code>.
+          Extrair para função utilitária em <code>app/services/_helpers.py</code>.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">C.6 — Índices em colunas de busca e ordenação</div>
+        <div class="item-detail">
+          Em <code>backend/app/models/contato.py</code> as colunas <code>nome</code>, <code>email</code> e
+          <code>criado_em</code> não têm <code>index=True</code>. Adicionar índices via migration Alembic;
+          impacto especialmente alto quando D.4 (filtros) e D.7 (dashboard) forem implementados.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h + migração</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">C.7 — Elevar cobertura de testes do frontend</div>
+        <div class="item-detail">
+          Jest + Testing Library já estão configurados, mas a cobertura aparente é &lt; 20%.
+          Criar testes para: fluxo de login, validação do <code>ContatoForm</code>, paginação/busca da listagem,
+          modal de "alterações não salvas". Meta: ≥ 60%.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~4h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">C.8 — Linter de segurança no pipeline</div>
+        <div class="item-detail">
+          Adicionar <code>bandit</code> (Python) e <code>eslint-plugin-security</code> ao pre-commit hook
+          (E.5). Falhar build se houver findings de severidade ≥ MEDIUM.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE D — UX & FUNCIONALIDADES -->
+  <div class="phase phase-D">
+    <div class="phase-header">
+      <h2>Fase D — UX e novas funcionalidades</h2>
+      <span class="badge badge-green">Valor de negócio</span>
+      <span class="effort">~33h estimadas</span>
+    </div>
+    <p class="phase-intro">
+      Reorganização das Fases 2 e 4 do v1 ainda não entregues, somadas a duas novas
+      melhorias de UX identificadas em auditoria de acessibilidade e internacionalização.
+    </p>
+    <ul class="items">
+      <li>
+        <div class="item-title">D.1 — Ordenação de colunas na tabela</div>
+        <div class="item-detail">
+          Backend: parâmetros <code>sort_by</code> e <code>sort_order</code> em <code>GET /contatos/</code>.
+          Frontend: ícone de seta nos headers com estado ASC/DESC. Depende de C.6 (índices).
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (2.1)</span>
+          <span class="item-effort">Esforço: ~4h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.2 — CRUD completo de usuários</div>
+        <div class="item-detail">
+          Hoje só existe <code>POST /usuarios/</code>. Adicionar GET (lista + detalhe),
+          PUT, DELETE e <code>PATCH /usuarios/{id}/role</code> (apenas adm). Tela frontend em <code>/usuarios</code>.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (2.2)</span>
+          <span class="item-effort">Esforço: ~7h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.3 — Máscara e validação de telefone</div>
+        <div class="item-detail">
+          <code>react-input-mask</code> já está no <code>package.json</code>; aplicar máscara
+          <code>(99) 99999-9999</code> em <code>ContatoForm</code> e validar via Zod.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (2.3)</span>
+          <span class="item-effort">Esforço: ~2h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.4 — Filtros avançados de contatos</div>
+        <div class="item-detail">
+          Painel "Filtros" colapsável: empresa, range de criação, sem email, sem telefone.
+          Aproveitar <code>useDebounce</code> (C.2) e índices (C.6).
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (4.1)</span>
+          <span class="item-effort">Esforço: ~5h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.5 — Exportar contatos (CSV / Excel)</div>
+        <div class="item-detail">
+          Botão "Exportar" respeita busca/filtros atuais. Backend: <code>GET /contatos/export?format=csv</code>
+          com streaming response.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (4.2)</span>
+          <span class="item-effort">Esforço: ~4h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.6 — Importar contatos via CSV</div>
+        <div class="item-detail">
+          Upload com mapeamento de colunas, preview e dry-run antes do commit.
+          Validação linha-a-linha com relatório de erros.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (4.3)</span>
+          <span class="item-effort">Esforço: ~6h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.7 — Dashboard / métricas</div>
+        <div class="item-detail">
+          Tela <code>/dashboard</code>: total de contatos, criados no mês, top empresas.
+          Backend: <code>GET /stats</code> com agregação SQL.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (4.4)</span>
+          <span class="item-effort">Esforço: ~5h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.8 — Recuperação de senha por e-mail</div>
+        <div class="item-detail">
+          <code>POST /auth/forgot-password</code> → token de uso único com TTL curto;
+          <code>POST /auth/reset-password</code> valida e redefine. Integrar provedor SMTP (Resend/SendGrid).
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (4.5)</span>
+          <span class="item-effort">Esforço: ~6h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.9 — Tags / categorias em contatos</div>
+        <div class="item-detail">
+          Tabela <code>tag</code> + tabela associativa <code>contato_tag</code>. Filtro multi-tag na listagem.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (4.6)</span>
+          <span class="item-effort">Esforço: ~5h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.10 — Acessibilidade: <code>aria-label</code> em botões/ícones</div>
+        <div class="item-detail">
+          Botões com ícone-somente em <code>ContatoForm.tsx</code> e campo de busca em <code>contatos/page.tsx</code>
+          não têm rótulo acessível. Adicionar <code>aria-label</code> e <code>role</code> onde necessário; rodar
+          axe-core no CI.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">D.11 — Internacionalização (i18n)</div>
+        <div class="item-detail">
+          Todos os textos estão hardcoded em PT-BR. Adotar <code>next-intl</code> com namespaces por feature.
+          Não é bloqueante hoje, mas inclui-se aqui para quando houver clientes fora do Brasil.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~3h</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- FASE E — INFRA -->
+  <div class="phase phase-E">
+    <div class="phase-header">
+      <h2>Fase E — Infraestrutura e operação</h2>
+      <span class="badge badge-blue">Operacional</span>
+      <span class="effort">~18h estimadas</span>
+    </div>
+    <p class="phase-intro">
+      Pendências da Fase 5 do v1 + adições orientadas a qualidade de pipeline.
+      A migração para PostgreSQL (E.2) deixou de ser opcional e é pré-requisito para qualquer carga real.
+    </p>
+    <ul class="items">
+      <li>
+        <div class="item-title">E.1 — Docker Compose com api + frontend + db</div>
+        <div class="item-detail">
+          <code>docker-compose.yml</code> com três serviços. Healthcheck (B.5) usado pelo
+          <code>depends_on: condition: service_healthy</code>.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (5.1)</span>
+          <span class="item-effort">Esforço: ~3h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">E.2 — Migrar SQLite → PostgreSQL</div>
+        <div class="item-detail">
+          Atualizar <code>DATABASE_URL</code>, ajustar tipos (UUID nativo, JSONB para tags em D.9),
+          rodar suíte de testes contra a nova engine. Promovido a "alta prioridade" porque SQLite
+          não suporta a concorrência exigida por D.4–D.7.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (5.2)</span>
+          <span class="item-effort">Esforço: ~4h + testes</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">E.3 — CI/CD com GitHub Actions</div>
+        <div class="item-detail">
+          Pipeline: lint → testes backend (pytest) → testes frontend (jest) → build Docker
+          → deploy. Cobertura mínima como gate (≥ 80% backend, ≥ 60% frontend após C.7).
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (5.3)</span>
+          <span class="item-effort">Esforço: ~4h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">E.4 — Dark mode</div>
+        <div class="item-detail">
+          Tailwind <code>dark:</code> classes + toggle no Navbar + persistência por usuário (via API)
+          ou <code>localStorage</code> como fallback.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag from-v1">Vem do v1 (5.5)</span>
+          <span class="item-effort">Esforço: ~4h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">E.5 — Pre-commit hooks (ruff, black, prettier, eslint)</div>
+        <div class="item-detail">
+          <code>.pre-commit-config.yaml</code> com ruff + black no backend e
+          prettier + eslint no frontend. Bandit (C.8) também aqui.
+          Reduz ruído de revisão e padroniza o código produzido pelos agentes.
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~2h</span>
+        </div>
+      </li>
+      <li>
+        <div class="item-title">E.6 — Retry e timeout no cliente HTTP</div>
+        <div class="item-detail">
+          <code>frontend/src/services/api.ts</code> não tem timeout customizado nem retry.
+          Configurar <code>timeout: 10000</code> e usar <code>axios-retry</code> para
+          5xx idempotentes (apenas GET, HEAD).
+        </div>
+        <div class="item-meta">
+          <span class="item-tag new">Novo achado</span>
+          <span class="item-effort">Esforço: ~1h</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- RESUMO -->
+  <div class="summary-section">
+    <h2>Resumo por fase</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Fase</th>
+          <th>Foco</th>
+          <th>Itens</th>
+          <th>Esforço</th>
+          <th>Impacto</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>A — Segurança crítica</strong></td>
+          <td>JWT, SECRET_KEY, CORS, rate limit, payload</td>
+          <td>6</td>
+          <td>~10h</td>
+          <td><span class="badge badge-red">Crítico</span></td>
+        </tr>
+        <tr>
+          <td><strong>B — Observabilidade</strong></td>
+          <td>Logging, exceções, Sentry, audit log, health</td>
+          <td>5</td>
+          <td>~12h</td>
+          <td><span class="badge badge-orange">Alto</span></td>
+        </tr>
+        <tr>
+          <td><strong>C — Qualidade</strong></td>
+          <td>Refactor, índices, testes frontend, lint</td>
+          <td>8</td>
+          <td>~14h</td>
+          <td><span class="badge badge-yellow">Médio</span></td>
+        </tr>
+        <tr>
+          <td><strong>D — UX &amp; features</strong></td>
+          <td>Ordenação, CRUD usuários, filtros, export, dashboard, a11y, i18n</td>
+          <td>11</td>
+          <td>~33h</td>
+          <td><span class="badge badge-green">Valor de negócio</span></td>
+        </tr>
+        <tr>
+          <td><strong>E — Infraestrutura</strong></td>
+          <td>Docker, PostgreSQL, CI/CD, dark mode, pre-commit, retry</td>
+          <td>6</td>
+          <td>~18h</td>
+          <td><span class="badge badge-blue">Operacional</span></td>
+        </tr>
+        <tr style="font-weight:600; background:#f8fafc;">
+          <td colspan="2"><strong>Total estimado</strong></td>
+          <td><strong>36 itens</strong></td>
+          <td><strong>~87h</strong></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- RECOMENDAÇÃO -->
+  <div class="rec-section">
+    <h2>Recomendação de sequência</h2>
+    <div class="rec-block">
+      <h3>Para colocar em produção com segurança</h3>
+      <p>
+        Fase A (toda) &rarr; Fase B.1, B.2, B.5 &rarr; Fase E.2 (PostgreSQL) &rarr; Fase E.1 (Docker)
+        &rarr; Fase E.3 (CI/CD) &rarr; Fase B.3 (Sentry) &rarr; Fase B.4 (audit log).
+        Esse caminho atende PCI DSS v4.0.1 e habilita operação observável antes de ligar tráfego real.
+      </p>
+    </div>
+    <div class="rec-block">
+      <h3>Para evoluir produto rapidamente</h3>
+      <p>
+        Fase A.1, A.2 (mínimo de segurança) &rarr; Fase C.1, C.2 (preparar terreno)
+        &rarr; Fase D.1, D.4, D.7 (ordenação, filtros, dashboard) &rarr; Fase D.5, D.6 (export/import)
+        &rarr; restante de C e E em paralelo.
+      </p>
+    </div>
+    <div class="rec-block">
+      <h3>Para reduzir dívida técnica antes de novas features</h3>
+      <p>
+        Fase C inteira &rarr; Fase B.1, B.2 &rarr; Fase E.5 (pre-commit) &rarr; Fase A.
+        Recomendado se a squad precisa estabilizar a base antes de aceitar novas histórias.
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    Squad Agentes &mdash; Release Notes v2 &mdash; 2026-05-19 &mdash; gerado pós-entrega das Fases 1, 3.1 e 3.2
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,65 @@
+# Pipeline de segurança — TASK-21 (Sub-fase C.1)
+#
+# Roda análise estática de segurança no backend (Bandit) e no frontend
+# (eslint-plugin-security). Falha o job quando há findings de severidade
+# MEDIUM ou HIGH (backend) ou qualquer warning de `security/*` (frontend).
+#
+# Este workflow deve ser marcado como REQUIRED em branch protection do master.
+
+name: security
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  backend-security:
+    name: Backend — Bandit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Instalar bandit
+        # Instalamos apenas o bandit (não as deps de runtime) para acelerar o job.
+        run: pip install "bandit>=1.7.5"
+
+      - name: Rodar Bandit (gate MEDIUM/HIGH)
+        # --severity-level medium: ignora findings LOW (ruído de DEV).
+        # --confidence-level medium: ignora findings de confiança LOW (falsos positivos prováveis).
+        # Sai com código != 0 quando há findings >= MEDIUM, falhando o job.
+        working-directory: backend
+        run: bandit -c .bandit -r app/ --severity-level medium --confidence-level medium
+
+  frontend-security:
+    name: Frontend — eslint-plugin-security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: frontend
+        run: npm ci
+
+      - name: Rodar eslint-plugin-security (gate sem warnings)
+        # O script `lint:security` já roda com --max-warnings=0,
+        # então qualquer warning das regras security/* falha o job.
+        working-directory: frontend
+        run: npm run lint:security
