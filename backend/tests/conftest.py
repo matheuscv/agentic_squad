@@ -170,10 +170,13 @@ def contato_exemplo(db_session):
     Cria um contato diretamente via contato_service e retorna o objeto Contato.
     Não depende de autenticação — ideal para testes de leitura.
     """
+    # Fase D / TASK-04: o schema Pydantic ContatoCriar agora valida telefone
+    # contra o regex ^\(\d{2}\) \d{5}-\d{4}$. Atualizada a fixture para
+    # usar o formato mascarado oficial (RF-04 do PRD Fase D).
     dados = ContatoCriar(
         nome="Maria Contato",
         email="maria@contato.com",
-        telefone="11999999999",
+        telefone="(11) 99999-9999",
         empresa="Empresa Teste",
         observacoes="Observação de teste",
     )

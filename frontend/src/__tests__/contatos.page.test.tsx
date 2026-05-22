@@ -16,8 +16,14 @@ import userEvent from '@testing-library/user-event'
 // Mocks --------------------------------------------------------------
 
 const pushMock = jest.fn()
+const replaceMock = jest.fn()
+// Fase D / TASK-07 e TASK-09: a pagina agora usa usePathname e
+// useSearchParams para sincronizar sort + filtros com a URL. Adicionamos
+// mocks consistentes para que o componente renderize sem TypeError.
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, replace: replaceMock }),
+  usePathname: () => '/contatos',
+  useSearchParams: () => new URLSearchParams(),
 }))
 
 jest.mock('../components/ProtectedRoute', () => {

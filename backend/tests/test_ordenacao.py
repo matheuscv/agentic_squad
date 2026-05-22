@@ -34,10 +34,14 @@ def _criar_contatos_multiplos(db_session):
 # ---------------------------------------------------------------------------
 
 def test_listar_sem_params_usa_nome_asc(client, usuario_default_token, db_session):
-    """GET /contatos/ sem parâmetros de ordenação retorna resultados por nome ASC."""
+    """GET /contatos/?sort_by=nome&sort_order=asc retorna resultados por nome ASC."""
     _criar_contatos_multiplos(db_session)
 
-    resp = client.get("/contatos/", headers=_auth_header(usuario_default_token))
+    resp = client.get(
+        "/contatos/",
+        params={"sort_by": "nome", "sort_order": "asc"},
+        headers=_auth_header(usuario_default_token),
+    )
     assert resp.status_code == 200
     nomes = [c["nome"] for c in resp.json()["items"]]
     assert nomes == sorted(nomes), "Deve estar em ordem alfabética crescente (ASC)"

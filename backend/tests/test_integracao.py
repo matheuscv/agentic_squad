@@ -121,10 +121,11 @@ def test_fluxo_completo_adm(client_integracao, db_integracao):
     headers = _auth(token)
 
     # 3. Criar contato
+    # Fase D / TASK-04: telefone deve seguir mascara (XX) XXXXX-XXXX (RF-04).
     payload = {
         "nome": "Cliente Integracao",
         "email": "cli_int@empresa.com",
-        "telefone": "11933334444",
+        "telefone": "(11) 93333-4444",
         "empresa": "CorpInt",
         "observacoes": "Criado no fluxo E2E",
     }

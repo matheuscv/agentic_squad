@@ -571,9 +571,14 @@ def test_contato_patch_telefone_valido_celular():
 
 
 def test_contato_patch_telefone_valido_fixo():
-    """ContatoPatch com telefone no formato fixo deve ser aceito."""
-    dados = ContatoPatch(telefone="(11) 3456-7890")
-    assert dados.telefone == "(11) 3456-7890"
+    """ContatoPatch com telefone no formato FIXO (10 digitos) deve ser REJEITADO.
+
+    Fase D / TASK-04 (RF-04): o contrato unico desta entrega aceita apenas o
+    formato celular brasileiro (XX) XXXXX-XXXX (11 digitos com mascara).
+    Telefone fixo (10 digitos) e rejeitado com ValidationError -> HTTP 422.
+    """
+    with pytest.raises(ValidationError):
+        ContatoPatch(telefone="(11) 3456-7890")
 
 
 def test_usuario_criar_senha_curta_levanta_validation_error():
