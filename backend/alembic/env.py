@@ -2,7 +2,7 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, engine_from_config, pool
 
 from alembic import context
 
@@ -24,17 +24,24 @@ if config.config_file_name is not None:
 # Metadata do SQLAlchemy — usado pelo autogenerate
 target_metadata = Base.metadata
 
+# URL efetiva: DATABASE_URL do ambiente tem prioridade sobre alembic.ini.
+# NÃO usamos config.set_main_option() pois o configparser do Python trata '%'
+# como sintaxe de interpolação — URLs com senhas codificadas (%40, %23, etc.)
+# causam ValueError. Lemos a URL diretamente do ambiente em cada função.
+_env_db_url: str | None = os.environ.get("DATABASE_URL")
+
 
 def run_migrations_offline() -> None:
     """Executa migrações em modo offline (sem conexão ativa)."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = _env_db_url or config.get_main_option("sqlalchemy.url") or ""
+    # render_as_batch só é necessário para SQLite (não suporta ALTER TABLE completo)
+    render_as_batch = url.startswith("sqlite")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        # SQLite não suporta ALTER TABLE completo; render_as_batch contorna isso
-        render_as_batch=True,
+        render_as_batch=render_as_batch,
     )
 
     with context.begin_transaction():
@@ -43,18 +50,25 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Executa migrações em modo online (com conexão ativa)."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    if _env_db_url:
+        # Cria engine diretamente da variável de ambiente, bypassando o
+        # configparser para evitar erros de interpolação com '%' na senha.
+        connectable = create_engine(_env_db_url, poolclass=pool.NullPool)
+    else:
+        connectable = engine_from_config(
+            config.get_section(config.config_ini_section, {}),
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
+
+    _url = _env_db_url or config.get_main_option("sqlalchemy.url") or ""
+    render_as_batch = _url.startswith("sqlite")
 
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # SQLite não suporta ALTER TABLE completo; render_as_batch contorna isso
-            render_as_batch=True,
+            render_as_batch=render_as_batch,
         )
 
         with context.begin_transaction():
