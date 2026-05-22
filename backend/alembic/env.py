@@ -2,7 +2,7 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, engine_from_config, pool
 
 from alembic import context
 
@@ -17,12 +17,6 @@ from app.models.contato import Contato  # noqa: E402, F401
 # Objeto de configuração do alembic (lê alembic.ini)
 config = context.config
 
-# Sobrescreve a URL do alembic.ini com DATABASE_URL do ambiente (se definida).
-# Necessário para que o Render/produção use PostgreSQL em vez do SQLite local.
-_db_url = os.environ.get("DATABASE_URL")
-if _db_url:
-    config.set_main_option("sqlalchemy.url", _db_url)
-
 # Configura logging a partir do alembic.ini
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -30,10 +24,16 @@ if config.config_file_name is not None:
 # Metadata do SQLAlchemy — usado pelo autogenerate
 target_metadata = Base.metadata
 
+# URL efetiva: DATABASE_URL do ambiente tem prioridade sobre alembic.ini.
+# NÃO usamos config.set_main_option() pois o configparser do Python trata '%'
+# como sintaxe de interpolação — URLs com senhas codificadas (%40, %23, etc.)
+# causam ValueError. Lemos a URL diretamente do ambiente em cada função.
+_env_db_url: str | None = os.environ.get("DATABASE_URL")
+
 
 def run_migrations_offline() -> None:
     """Executa migrações em modo offline (sem conexão ativa)."""
-    url = config.get_main_option("sqlalchemy.url") or ""
+    url = _env_db_url or config.get_main_option("sqlalchemy.url") or ""
     # render_as_batch só é necessário para SQLite (não suporta ALTER TABLE completo)
     render_as_batch = url.startswith("sqlite")
     context.configure(
@@ -50,13 +50,18 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Executa migrações em modo online (com conexão ativa)."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    if _env_db_url:
+        # Cria engine diretamente da variável de ambiente, bypassando o
+        # configparser para evitar erros de interpolação com '%' na senha.
+        connectable = create_engine(_env_db_url, poolclass=pool.NullPool)
+    else:
+        connectable = engine_from_config(
+            config.get_section(config.config_ini_section, {}),
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
 
-    _url = config.get_main_option("sqlalchemy.url") or ""
+    _url = _env_db_url or config.get_main_option("sqlalchemy.url") or ""
     render_as_batch = _url.startswith("sqlite")
 
     with connectable.connect() as connection:
