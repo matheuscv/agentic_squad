@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP Server — Contatos</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header {
+      background: #0f172a;
+      color: #fff;
+      border-radius: 12px;
+      padding: 2rem 2.5rem;
+      margin-bottom: 2rem;
+      border-left: 6px solid #06b6d4;
+    }
+    header h1 { font-size: 1.8rem; margin-bottom: .4rem; }
+    header .subtitle { font-size: 1rem; color: #94a3b8; margin-bottom: .6rem; }
+    header .meta { font-size: .85rem; opacity: .65; }
+    .tag-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .8rem; }
+    .tag {
+      display: inline-block;
+      border-radius: 20px;
+      padding: .25rem .9rem;
+      font-size: .78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag-cyan   { background: #06b6d4; color: #fff; }
+    .tag-blue   { background: #3b82f6; color: #fff; }
+    .tag-green  { background: #22c55e; color: #1a1a2e; }
+    .tag-yellow { background: #fbbf24; color: #1a1a2e; }
+    .tag-purple { background: #7c3aed; color: #fff; }
+
+    .alert {
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 1.5rem;
+      font-size: .9rem;
+      line-height: 1.6;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .alert-info  { background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; }
+    .alert-warn  { background: #fffbeb; border: 1px solid #fbbf24; color: #92400e; }
+    .alert-icon  { font-size: 1.3rem; flex-shrink: 0; margin-top: .1rem; }
+
+    .section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .section h2 {
+      font-size: 1.15rem;
+      color: #0f172a;
+      margin-bottom: 1.2rem;
+      padding-bottom: .6rem;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+    th {
+      background: #f1f5f9;
+      text-align: left;
+      padding: .6rem .8rem;
+      font-weight: 600;
+      color: #475569;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    td {
+      padding: .6rem .8rem;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+
+    code {
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: .1rem .4rem;
+      font-size: .82em;
+      color: #0f4c81;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 1.4rem 1.6rem;
+      overflow-x: auto;
+      font-size: .83rem;
+      line-height: 1.7;
+      margin: .8rem 0;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    }
+    pre .cm { color: #64748b; }
+    pre .kw { color: #818cf8; }
+    pre .fn { color: #34d399; }
+    pre .st { color: #fbbf24; }
+    pre .at { color: #38bdf8; }
+    pre .nu { color: #fb923c; }
+
+    .tool-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 1rem;
+      border-left: 4px solid #06b6d4;
+    }
+    .tool-card h3 { font-size: 1rem; color: #0f172a; margin-bottom: .6rem; }
+    .tool-card ul { padding-left: 1.2rem; font-size: .88rem; line-height: 1.8; color: #334155; }
+
+    .files-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: .8rem;
+    }
+    .file-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: .8rem 1rem;
+      font-size: .85rem;
+    }
+    .file-item .path { font-family: monospace; font-weight: 700; color: #0f4c81; margin-bottom: .3rem; }
+    .file-item .desc { color: #64748b; font-size: .8rem; }
+
+    .step-list { list-style: none; padding: 0; }
+    .step-list li {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: .7rem 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: .9rem;
+    }
+    .step-list li:last-child { border-bottom: none; }
+    .step-num {
+      background: #06b6d4;
+      color: #fff;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    footer {
+      text-align: center;
+      color: #94a3b8;
+      font-size: .82rem;
+      padding: 1.5rem 0;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>MCP Server — Contatos</h1>
+    <div class="subtitle">Servidor Model Context Protocol sobre a API REST de Contatos</div>
+    <div class="meta">agentic_squad &nbsp;·&nbsp; Gerado em 2026-05-22</div>
+    <div class="tag-row">
+      <span class="tag tag-cyan">MCP</span>
+      <span class="tag tag-blue">FastMCP</span>
+      <span class="tag tag-green">FastAPI</span>
+      <span class="tag tag-yellow">Python 3.11+</span>
+      <span class="tag tag-purple">4 Tools</span>
+    </div>
+  </header>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">ℹ️</span>
+    <div>
+      <strong>Objetivo:</strong> Expor as operações de CRUD de contatos como <strong>tools MCP</strong> para que agentes externos possam interagir com a base de dados sem precisar conhecer os detalhes HTTP da API.
+      O MCP atua como cliente HTTP da API FastAPI existente (<code>http://localhost:8000</code>), reutilizando toda a lógica de negócio, validação e auditoria já implementada.
+    </div>
+  </div>
+
+  <!-- ABORDAGEM -->
+  <div class="section">
+    <h2>⚙️ Abordagem</h2>
+    <p style="font-size:.9rem;line-height:1.7;color:#334155;margin-bottom:1rem;">
+      O servidor MCP é implementado em Python usando o SDK oficial <strong>FastMCP</strong> (pacote <code>mcp[cli]</code>).
+      Ele faz chamadas <code>httpx</code> para a API REST local e retorna os resultados formatados como saída de tools.
+      A autenticação JWT é obtida via <code>POST /auth/login</code> de forma <em>lazy</em> e renovada automaticamente em caso de 401.
+    </p>
+    <table>
+      <thead><tr><th>Decisão</th><th>Escolha</th><th>Motivo</th></tr></thead>
+      <tbody>
+        <tr><td>Interface</td><td><code>FastMCP</code> (alto nível)</td><td>Declaração de tools via decoradores — menos boilerplate</td></tr>
+        <tr><td>Transporte</td><td><code>stdio</code></td><td>Padrão para integração com Claude Code e outros hosts MCP</td></tr>
+        <tr><td>HTTP client</td><td><code>httpx</code> (síncrono)</td><td>FastMCP executa tools síncronas por padrão; sem overhead async</td></tr>
+        <tr><td>Auth</td><td>Lazy JWT via <code>/auth/login</code></td><td>Credenciais em variáveis de ambiente; sem token hardcoded</td></tr>
+        <tr><td>Update</td><td><code>PATCH /contatos/{id}</code></td><td>Atualização parcial — só campos informados são alterados</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ESTRUTURA -->
+  <div class="section">
+    <h2>📁 Estrutura de Arquivos</h2>
+    <div class="files-grid">
+      <div class="file-item">
+        <div class="path">mcp/server.py</div>
+        <div class="desc">Servidor MCP principal com as 4 tools</div>
+      </div>
+      <div class="file-item">
+        <div class="path">mcp/requirements.txt</div>
+        <div class="desc">Dependências: mcp[cli], httpx, python-dotenv</div>
+      </div>
+      <div class="file-item">
+        <div class="path">mcp/.env.example</div>
+        <div class="desc">Template de variáveis de ambiente</div>
+      </div>
+      <div class="file-item">
+        <div class="path">.mcp.json</div>
+        <div class="desc">Registro do servidor no Claude Code</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTH -->
+  <div class="section">
+    <h2>🔑 Configuração de Autenticação</h2>
+    <div class="alert alert-warn" style="margin-bottom:1rem;">
+      <span class="alert-icon">⚠️</span>
+      <div>A conta configurada em <code>MCP_USERNAME</code> / <code>MCP_PASSWORD</code> precisa ter <strong>role <code>adm</code></strong>, pois as tools de criar, alterar e excluir chamam endpoints protegidos por <code>require_adm</code>.</div>
+    </div>
+    <table>
+      <thead><tr><th>Variável</th><th>Descrição</th><th>Exemplo</th></tr></thead>
+      <tbody>
+        <tr><td><code>API_URL</code></td><td>URL base da API FastAPI</td><td><code>http://localhost:8000</code></td></tr>
+        <tr><td><code>MCP_USERNAME</code></td><td>E-mail do usuário admin</td><td><code>admin@exemplo.com</code></td></tr>
+        <tr><td><code>MCP_PASSWORD</code></td><td>Senha do usuário admin</td><td><code>senha_secreta</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TOOLS -->
+  <div class="section">
+    <h2>🛠️ As 4 Tools MCP</h2>
+
+    <div class="tool-card">
+      <h3>1. <code>listar_contatos</code></h3>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>GET /contatos/?limit=1000</code></li>
+        <li><strong>Input:</strong> nenhum parâmetro</li>
+        <li><strong>Output:</strong> lista de dicionários com <code>id</code>, <code>nome</code>, <code>email</code>, <code>telefone</code>, <code>empresa</code>, <code>observacoes</code>, <code>criado_em</code></li>
+      </ul>
+    </div>
+
+    <div class="tool-card">
+      <h3>2. <code>criar_contato</code></h3>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>POST /contatos/</code></li>
+        <li><strong>Obrigatórios:</strong> <code>nome: str</code>, <code>email: str</code></li>
+        <li><strong>Opcionais:</strong> <code>telefone: str</code> (formato <code>(XX) XXXXX-XXXX</code>), <code>empresa: str</code>, <code>observacoes: str</code></li>
+        <li><strong>Output:</strong> contato criado com <code>id</code></li>
+        <li><strong>Erros:</strong> 400 se email duplicado · 422 se campos inválidos</li>
+      </ul>
+    </div>
+
+    <div class="tool-card">
+      <h3>3. <code>atualizar_contato</code></h3>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>PATCH /contatos/{id}</code> (atualização parcial)</li>
+        <li><strong>Obrigatório:</strong> <code>id: int</code></li>
+        <li><strong>Pelo menos 1:</strong> <code>nome</code>, <code>email</code>, <code>telefone</code>, <code>empresa</code>, <code>observacoes</code></li>
+        <li><strong>Output:</strong> contato atualizado</li>
+        <li><strong>Erros:</strong> 404 se não encontrado · 400 se email duplicado</li>
+      </ul>
+    </div>
+
+    <div class="tool-card">
+      <h3>4. <code>excluir_contato</code></h3>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>DELETE /contatos/{id}</code></li>
+        <li><strong>Input:</strong> <code>id: int</code></li>
+        <li><strong>Output:</strong> mensagem de confirmação (<em>soft delete</em> — marca <code>deletado_em</code>, não remove o registro)</li>
+        <li><strong>Erros:</strong> 404 se não encontrado</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- CÓDIGO -->
+  <div class="section">
+    <h2>💻 Código — mcp/server.py</h2>
+<pre><span class="cm">"""MCP Server — Contatos (wraps FastAPI REST API)."""</span>
+<span class="kw">import</span> os
+<span class="kw">from</span> typing <span class="kw">import</span> Optional
+
+<span class="kw">import</span> httpx
+<span class="kw">from</span> dotenv <span class="kw">import</span> load_dotenv
+<span class="kw">from</span> mcp.server.fastmcp <span class="kw">import</span> FastMCP
+
+load_dotenv()
+
+<span class="at">API_URL</span> = os.getenv(<span class="st">"API_URL"</span>, <span class="st">"http://localhost:8000"</span>)
+<span class="at">_token</span>: Optional[str] = None
+
+mcp = <span class="fn">FastMCP</span>(<span class="st">"contatos-mcp"</span>)
+
+
+<span class="kw">def</span> <span class="fn">_login</span>() -&gt; str:
+    resp = httpx.<span class="fn">post</span>(f<span class="st">"{API_URL}/auth/login"</span>, json={
+        <span class="st">"email"</span>: os.<span class="fn">getenv</span>(<span class="st">"MCP_USERNAME"</span>),
+        <span class="st">"senha"</span>: os.<span class="fn">getenv</span>(<span class="st">"MCP_PASSWORD"</span>),
+    })
+    resp.<span class="fn">raise_for_status</span>()
+    <span class="kw">return</span> resp.<span class="fn">json</span>()[<span class="st">"access_token"</span>]
+
+
+<span class="kw">def</span> <span class="fn">_headers</span>() -&gt; dict:
+    <span class="kw">global</span> _token
+    <span class="kw">if not</span> _token:
+        _token = <span class="fn">_login</span>()
+    <span class="kw">return</span> {<span class="st">"Authorization"</span>: f<span class="st">"Bearer {_token}"</span>}
+
+
+<span class="kw">def</span> <span class="fn">_request</span>(method: str, path: str, **kwargs) -&gt; httpx.Response:
+    <span class="cm"># Renova token automaticamente em caso de 401</span>
+    <span class="kw">global</span> _token
+    resp = httpx.<span class="fn">request</span>(method, f<span class="st">"{API_URL}{path}"</span>, headers=<span class="fn">_headers</span>(), **kwargs)
+    <span class="kw">if</span> resp.status_code == <span class="nu">401</span>:
+        _token = <span class="fn">_login</span>()
+        resp = httpx.<span class="fn">request</span>(method, f<span class="st">"{API_URL}{path}"</span>, headers=<span class="fn">_headers</span>(), **kwargs)
+    <span class="kw">return</span> resp
+
+
+<span class="at">@mcp.tool()</span>
+<span class="kw">def</span> <span class="fn">listar_contatos</span>() -&gt; list[dict]:
+    <span class="st">"""Lista todos os contatos cadastrados na base."""</span>
+    resp = <span class="fn">_request</span>(<span class="st">"GET"</span>, <span class="st">"/contatos/"</span>, params={<span class="st">"limit"</span>: <span class="nu">1000</span>})
+    resp.<span class="fn">raise_for_status</span>()
+    <span class="kw">return</span> resp.<span class="fn">json</span>()[<span class="st">"items"</span>]
+
+
+<span class="at">@mcp.tool()</span>
+<span class="kw">def</span> <span class="fn">criar_contato</span>(
+    nome: str,
+    email: str,
+    telefone: Optional[str] = None,
+    empresa: Optional[str] = None,
+    observacoes: Optional[str] = None,
+) -&gt; dict:
+    <span class="st">"""Cria um novo contato. nome e email são obrigatórios."""</span>
+    payload = {<span class="st">"nome"</span>: nome, <span class="st">"email"</span>: email}
+    <span class="kw">if</span> telefone: payload[<span class="st">"telefone"</span>] = telefone
+    <span class="kw">if</span> empresa: payload[<span class="st">"empresa"</span>] = empresa
+    <span class="kw">if</span> observacoes: payload[<span class="st">"observacoes"</span>] = observacoes
+    resp = <span class="fn">_request</span>(<span class="st">"POST"</span>, <span class="st">"/contatos/"</span>, json=payload)
+    resp.<span class="fn">raise_for_status</span>()
+    <span class="kw">return</span> resp.<span class="fn">json</span>()
+
+
+<span class="at">@mcp.tool()</span>
+<span class="kw">def</span> <span class="fn">atualizar_contato</span>(
+    id: int,
+    nome: Optional[str] = None,
+    email: Optional[str] = None,
+    telefone: Optional[str] = None,
+    empresa: Optional[str] = None,
+    observacoes: Optional[str] = None,
+) -&gt; dict:
+    <span class="st">"""Atualiza parcialmente um contato. Informe apenas os campos a alterar."""</span>
+    payload = {k: v <span class="kw">for</span> k, v <span class="kw">in</span> {
+        <span class="st">"nome"</span>: nome, <span class="st">"email"</span>: email, <span class="st">"telefone"</span>: telefone,
+        <span class="st">"empresa"</span>: empresa, <span class="st">"observacoes"</span>: observacoes,
+    }.<span class="fn">items</span>() <span class="kw">if</span> v <span class="kw">is not None</span>}
+    resp = <span class="fn">_request</span>(<span class="st">"PATCH"</span>, f<span class="st">"/contatos/{id}"</span>, json=payload)
+    resp.<span class="fn">raise_for_status</span>()
+    <span class="kw">return</span> resp.<span class="fn">json</span>()
+
+
+<span class="at">@mcp.tool()</span>
+<span class="kw">def</span> <span class="fn">excluir_contato</span>(id: int) -&gt; str:
+    <span class="st">"""Exclui (soft delete) um contato pelo ID."""</span>
+    resp = <span class="fn">_request</span>(<span class="st">"DELETE"</span>, f<span class="st">"/contatos/{id}"</span>)
+    resp.<span class="fn">raise_for_status</span>()
+    <span class="kw">return</span> f<span class="st">"Contato {id} excluído com sucesso."</span>
+
+
+<span class="kw">if</span> __name__ == <span class="st">"__main__"</span>:
+    mcp.<span class="fn">run</span>()</pre>
+  </div>
+
+  <!-- .mcp.json -->
+  <div class="section">
+    <h2>🔌 Registro no Claude Code — .mcp.json</h2>
+    <p style="font-size:.88rem;color:#334155;margin-bottom:.8rem;">
+      Adicione na raiz do projeto para que o Claude Code carregue as tools automaticamente ao iniciar:
+    </p>
+<pre>{
+  <span class="at">"mcpServers"</span>: {
+    <span class="at">"contatos"</span>: {
+      <span class="at">"type"</span>: <span class="st">"stdio"</span>,
+      <span class="at">"command"</span>: <span class="st">"python"</span>,
+      <span class="at">"args"</span>: [<span class="st">"mcp/server.py"</span>],
+      <span class="at">"env"</span>: {
+        <span class="at">"API_URL"</span>: <span class="st">"http://localhost:8000"</span>,
+        <span class="at">"MCP_USERNAME"</span>: <span class="st">"admin@exemplo.com"</span>,
+        <span class="at">"MCP_PASSWORD"</span>: <span class="st">"sua_senha_aqui"</span>
+      }
+    }
+  }
+}</pre>
+  </div>
+
+  <!-- VERIFICAÇÃO -->
+  <div class="section">
+    <h2>✅ Verificação e Testes</h2>
+    <ol class="step-list">
+      <li>
+        <span class="step-num">1</span>
+        <div>Instalar dependências: <code>pip install -r mcp/requirements.txt</code></div>
+      </li>
+      <li>
+        <span class="step-num">2</span>
+        <div>Iniciar a API: <code>uvicorn app.main:app --reload</code> (no diretório <code>backend/</code>)</div>
+      </li>
+      <li>
+        <span class="step-num">3</span>
+        <div>Copiar e preencher credenciais: <code>cp mcp/.env.example mcp/.env</code></div>
+      </li>
+      <li>
+        <span class="step-num">4</span>
+        <div>Inspecionar via MCP Inspector: <code>mcp dev mcp/server.py</code> — abre UI no browser para testar cada tool interativamente</div>
+      </li>
+      <li>
+        <span class="step-num">5</span>
+        <div>Registrar no Claude Code: adicionar <code>.mcp.json</code> na raiz e reiniciar — as 4 tools ficam disponíveis no contexto do agente</div>
+      </li>
+    </ol>
+  </div>
+
+</div>
+<footer>agentic_squad &nbsp;·&nbsp; MCP Server de Contatos &nbsp;·&nbsp; 2026-05-22</footer>
+</body>
+</html>
