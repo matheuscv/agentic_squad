@@ -140,21 +140,10 @@ def excluir_contato(id: int) -> str:
 if __name__ == "__main__":
     transport = os.getenv("MCP_TRANSPORT", "stdio")
     if transport == "http":
-        import uvicorn
-        from starlette.middleware.base import BaseHTTPMiddleware
-        from starlette.responses import Response
-
-        api_key = os.getenv("MCP_API_KEY")
-
-        if api_key:
-            class _APIKeyMiddleware(BaseHTTPMiddleware):
-                async def dispatch(self, request, call_next):
-                    if request.headers.get("Authorization") != f"Bearer {api_key}":
-                        return Response("Unauthorized", status_code=401)
-                    return await call_next(request)
-
-            mcp.app.add_middleware(_APIKeyMiddleware)
-
-        uvicorn.run(mcp.app, host="0.0.0.0", port=int(os.getenv("PORT", "8001")))
+        mcp.run(
+            transport="streamable-http",
+            host="0.0.0.0",
+            port=int(os.getenv("PORT", "8001")),
+        )
     else:
         mcp.run()
