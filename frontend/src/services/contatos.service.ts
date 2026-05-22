@@ -11,13 +11,33 @@ export interface ContatosPageResponse {
   total: number
 }
 
+// ---------------------------------------------------------------------------
+// TASK-09 — Filtros avancados (D.4).
+// Container opcional para os 5 filtros do RF-05. Todos os campos sao
+// opcionais e ignorados quando ausentes / vazios.
+// ---------------------------------------------------------------------------
+export interface ContatosFilterParams {
+  /** Busca parcial case-insensitive sobre o campo empresa. */
+  empresa?: string
+  /** Data inicial inclusiva no formato YYYY-MM-DD. */
+  criado_desde?: string
+  /** Data final inclusiva no formato YYYY-MM-DD. */
+  criado_ate?: string
+  /** Quando true, retorna apenas contatos com email vazio. */
+  sem_email?: boolean
+  /** Quando true, retorna apenas contatos com telefone vazio. */
+  sem_telefone?: boolean
+}
+
 /**
- * Lista contatos com suporte a paginação, busca e ordenação.
+ * Lista contatos com suporte a paginação, busca, ordenação e filtros avancados.
  * - `busca`: filtra por nome, e-mail ou empresa (LIKE case-insensitive no backend)
  * - `skip`: quantos registros pular (offset)
  * - `limit`: quantos registros retornar
  * - `sort_by`: campo de ordenação (nome, email, empresa, criado_em)
  * - `sort_order`: direção de ordenação (asc | desc)
+ * - `filtros`: filtros avancados — empresa, criado_desde, criado_ate,
+ *   sem_email, sem_telefone (TASK-05 / TASK-09, RF-06)
  * O backend retorna `{ items: [...], total: N }`.
  */
 export async function listarContatos(
@@ -25,9 +45,12 @@ export async function listarContatos(
   skip?: number,
   limit?: number,
   sort_by?: string,
-  sort_order?: 'asc' | 'desc'
+  sort_order?: 'asc' | 'desc',
+  filtros?: ContatosFilterParams,
 ): Promise<ContatosPageResponse> {
-  const params: Record<string, string | number> = {}
+  // Aceita tipos primitivos heterogeneos: o axios serializa cada valor
+  // corretamente em sua representacao textual de query string.
+  const params: Record<string, string | number | boolean> = {}
   if (busca && busca.trim() !== '') {
     params.busca = busca.trim()
   }
@@ -37,6 +60,31 @@ export async function listarContatos(
   // Inclui ordenação apenas quando fornecida
   if (sort_by) params.sort_by = sort_by
   if (sort_order) params.sort_order = sort_order
+
+  // -------------------------------------------------------------------------
+  // TASK-09 — Filtros avancados.
+  // Cada filtro so e adicionado a query quando preenchido. Strings vazias
+  // sao tratadas como "nao informado" — o backend ja faz a mesma
+  // normalizacao (ContatoFilterParams), mas evitamos enviar lixo na URL.
+  // Booleans sao adicionados apenas quando `true` (filtro ativo).
+  // -------------------------------------------------------------------------
+  if (filtros) {
+    if (filtros.empresa && filtros.empresa.trim() !== '') {
+      params.empresa = filtros.empresa.trim()
+    }
+    if (filtros.criado_desde && filtros.criado_desde.trim() !== '') {
+      params.criado_desde = filtros.criado_desde
+    }
+    if (filtros.criado_ate && filtros.criado_ate.trim() !== '') {
+      params.criado_ate = filtros.criado_ate
+    }
+    if (filtros.sem_email) {
+      params.sem_email = true
+    }
+    if (filtros.sem_telefone) {
+      params.sem_telefone = true
+    }
+  }
 
   const response = await api.get<ContatosPageResponse>('/contatos/', { params })
   return response.data

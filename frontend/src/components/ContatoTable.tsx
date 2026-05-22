@@ -97,33 +97,57 @@ export default function ContatoTable({
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {/* Colunas ordenáveis: Nome, E-mail, Empresa, Data */}
-            {sortableColumns.map(({ label, field }) => (
-              <th
-                key={field}
-                className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
-              >
-                {onSort ? (
-                  <button
-                    type="button"
-                    onClick={() => onSort(field)}
-                    className="flex items-center gap-0.5 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded transition-colors"
-                    aria-label={`Ordenar por ${label}`}
-                  >
-                    {label}
-                    <SortIcon field={field} />
-                  </button>
-                ) : (
-                  label
-                )}
-              </th>
-            ))}
+            {/* Colunas ordenáveis: Nome, E-mail, Empresa, Data (criado_em).
+                aria-sort segue WAI-ARIA 1.2: "ascending" | "descending" para a
+                coluna ativa, "none" para colunas ordenáveis mas inativas. */}
+            {sortableColumns.map(({ label, field }) => {
+              const isActive = field === sortBy
+              const ariaSort: 'ascending' | 'descending' | 'none' = isActive
+                ? sortOrder === 'asc'
+                  ? 'ascending'
+                  : 'descending'
+                : 'none'
+              return (
+                <th
+                  key={field}
+                  scope="col"
+                  aria-sort={ariaSort}
+                  className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                >
+                  {onSort ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(field)}
+                      className="flex items-center gap-0.5 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded transition-colors"
+                      aria-label={
+                        isActive
+                          ? `Ordenar por ${label} (atualmente ${
+                              sortOrder === 'asc' ? 'crescente' : 'decrescente'
+                            })`
+                          : `Ordenar por ${label}`
+                      }
+                    >
+                      {label}
+                      <SortIcon field={field} />
+                    </button>
+                  ) : (
+                    label
+                  )}
+                </th>
+              )
+            })}
             {/* Coluna Telefone — não ordenável */}
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <th
+              scope="col"
+              className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+            >
               Telefone
             </th>
             {/* Coluna Ações — não ordenável */}
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <th
+              scope="col"
+              className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+            >
               Ações
             </th>
           </tr>

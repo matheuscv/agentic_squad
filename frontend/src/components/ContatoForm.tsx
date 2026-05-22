@@ -7,11 +7,16 @@ import { ContatoForm as ContatoFormType } from '../types'
 import { useBeforeUnload } from '../hooks/useBeforeUnload'
 import {
   CamposContatoForm, ErrosContatoForm, useContatoFormValidation,
-  validarTelefone, camposParaContatoForm, contatoFormParaCampos, camposDiferem,
+  camposParaContatoForm, contatoFormParaCampos, camposDiferem,
 } from '../hooks/useContatoFormValidation'
 import InputField from './form/InputField'
 import TextAreaField from './form/TextAreaField'
 import UnsavedChangesModal from './UnsavedChangesModal'
+// TASK-08 (FASE D.3): schema Zod do telefone — fonte única de verdade do
+// regex, alinhada ao backend (TASK-04). Importado aqui para validar o campo
+// no `onBlur` sem precisar alterar `useContatoFormValidation.ts` (que ainda
+// permanece como fallback no submit; será migrado em task futura).
+import { telefoneSchema, TELEFONE_MENSAGEM_ERRO } from '../lib/schemas'
 
 interface ContatoFormProps {
   valorInicial?: ContatoFormType
@@ -68,15 +73,36 @@ export default function ContatoForm({ valorInicial, onSubmit, loading, erro }: C
     }
   }
 
+  /**
+   * Valida telefone com o `telefoneSchema` (Zod). Centraliza o regex no
+   * `lib/schemas.ts` e mantém paridade com o contrato do backend (TASK-04).
+   * Retorna a mensagem PT-BR se inválido; string vazia se válido/opcional.
+   */
+  function validarTelefoneZod(valor: string): string {
+    // String vazia é tratada como ausência (campo opcional) — coerente com
+    // a normalização feita em `camposParaContatoForm` (vazio -> undefined).
+    const resultado = telefoneSchema.safeParse(valor === '' ? undefined : valor)
+    return resultado.success ? '' : TELEFONE_MENSAGEM_ERRO
+  }
+
   // Valida telefone apenas no `onBlur` — não bloqueia digitação.
   function handleTelefoneBlur() {
-    const erro = validarTelefone(campos.telefone)
+    const erro = validarTelefoneZod(campos.telefone)
     setErrosCampo((prev) => ({ ...prev, telefone: erro || undefined }))
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    // Valida demais campos pelo hook existente; telefone passa pelo Zod
+    // (regex estrito) para coerência com o backend. Caso o hook retorne
+    // um erro de telefone (regex mais permissivo), o Zod sobrescreve.
     const erros = validate(campos)
+    const erroTelefoneZod = validarTelefoneZod(campos.telefone)
+    if (erroTelefoneZod) {
+      erros.telefone = erroTelefoneZod
+    } else {
+      delete erros.telefone
+    }
     setErrosCampo(erros)
     if (Object.keys(erros).length > 0) return
     await onSubmit(camposParaContatoForm(campos))
