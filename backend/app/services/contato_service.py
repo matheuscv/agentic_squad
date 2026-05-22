@@ -1,15 +1,30 @@
 """Camada de serviço para operações CRUD de Contato."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.contato import Contato
-from app.schemas.contato import ContatoCriar, ContatoAtualizar, ContatoPatch
+from app.schemas.contato import (
+    ContatoAtualizar,
+    ContatoCriar,
+    ContatoPatch,
+    SortByContato,
+    SortOrder,
+)
 from app.services._helpers import garantir_unicidade
+
+# Allowlist EXPLICITA de colunas ordenaveis (TASK-03 / RF-01).
+# Manter como tupla derivada do enum para reduzir risco de divergencia entre
+# router e service. Qualquer coluna fora deste conjunto e rejeitada como 422
+# pelo Pydantic no router antes de chegar aqui — esta validacao em service
+# atua como defesa em profundidade contra erros futuros de refactor.
+_COLUNAS_ORDENACAO_PERMITIDAS: frozenset[str] = frozenset(
+    item.value for item in SortByContato
+)
 
 # Logger nomeado por módulo — TASK-05 (B.1).
 logger = logging.getLogger(__name__)
@@ -20,29 +35,66 @@ def listar_contatos(
     busca: str | None = None,
     skip: int = 0,
     limit: int = 20,
-    sort_by: str = "nome",
-    sort_order: str = "asc",
+    sort_by: SortByContato | str = SortByContato.criado_em,
+    sort_order: SortOrder | str = SortOrder.desc,
+    # TASK-05 — Filtros avancados (RF-06). Todos opcionais; combinaveis com
+    # `busca`, sort e paginacao. Quando None/False, o filtro nao e aplicado.
+    empresa: str | None = None,
+    criado_desde: date | None = None,
+    criado_ate: date | None = None,
+    sem_email: bool | None = None,
+    sem_telefone: bool | None = None,
 ) -> tuple[list[Contato], int]:
-    """Retorna uma tupla (items, total) com paginação e ordenação.
+    """Retorna uma tupla (items, total) com paginação, ordenação e filtros.
 
     - items: registros da página, aplicando ORDER BY, OFFSET skip, LIMIT limit
-    - total: contagem total de registros que atendem ao filtro de busca
+    - total: contagem total de registros que atendem aos filtros e a `busca`
 
     Se `busca` for fornecido, filtra com LIKE case-insensitive (ilike) nos
     campos nome, email e empresa (OR entre eles).
 
-    Parâmetros de ordenação (validados no router antes de chegar aqui):
-    - sort_by: nome da coluna — "nome", "email", "empresa", "criado_em"
-    - sort_order: "asc" ou "desc"
+    Parâmetros de ordenação (TASK-03 / RF-01):
+    - sort_by: coluna; default = `criado_em`. Allowlist em `SortByContato`:
+      nome, email, empresa, telefone, criado_em, atualizado_em.
+    - sort_order: direcao; default = `desc` (preserva ordenacao
+      cronologica reversa que era o comportamento atual).
+
+    Parâmetros de filtro avancado (TASK-05 / RF-06):
+    - empresa: busca parcial case-insensitive (ilike) sobre `contatos.empresa`.
+    - criado_desde: data inicial inclusiva (>= 00:00:00 do dia).
+    - criado_ate: data final inclusiva (<= 23:59:59.999999 do dia). Convertido
+      para `datetime` no fim do dia para garantir inclusao do dia inteiro
+      mesmo quando `criado_em` armazena timestamps com horas.
+    - sem_email: True -> apenas registros com email NULL OU string vazia.
+    - sem_telefone: True -> apenas registros com telefone NULL OU string vazia.
+
+    A validacao de coerencia (criado_desde > criado_ate) e feita no router
+    via `ContatoFilterParams` (Pydantic -> HTTP 422). Aqui assumimos que o
+    intervalo, se ambos fornecidos, ja e valido.
+
+    Defesa em profundidade: o router ja valida via Pydantic enums (HTTP 422
+    para valor invalido). Aqui revalidamos contra `_COLUNAS_ORDENACAO_PERMITIDAS`
+    para impedir SQL injection caso a funcao seja chamada por outro caller
+    (ex.: endpoint de export — TASK-06) com input ainda nao validado.
     """
-    # Mapeamento explícito de nomes de campo para colunas SQLAlchemy.
-    # Usar dicionário fechado evita SQL injection por substituição de coluna.
-    colunas_ordenacao = {
-        "nome": Contato.nome,
-        "email": Contato.email,
-        "empresa": Contato.empresa,
-        "criado_em": Contato.criado_em,
-    }
+    # Normaliza para string (aceita Enum ou str — facilita chamadas internas
+    # e testes que ainda passam str literal).
+    sort_by_str = sort_by.value if isinstance(sort_by, SortByContato) else str(sort_by)
+    sort_order_str = (
+        sort_order.value if isinstance(sort_order, SortOrder) else str(sort_order)
+    )
+
+    # Validacao defensiva contra allowlist — impede SQL injection caso a
+    # funcao seja chamada com input nao validado pelo Pydantic.
+    if sort_by_str not in _COLUNAS_ORDENACAO_PERMITIDAS:
+        raise ValueError(
+            f"sort_by invalido: {sort_by_str!r}. "
+            f"Permitidos: {sorted(_COLUNAS_ORDENACAO_PERMITIDAS)}"
+        )
+    if sort_order_str not in {"asc", "desc"}:
+        raise ValueError(
+            f"sort_order invalido: {sort_order_str!r}. Permitidos: asc, desc"
+        )
 
     # Predicado de filtro reutilizado tanto no COUNT quanto na consulta paginada.
     # Registros com soft delete (deletado_em IS NOT NULL) são excluídos da listagem normal.
@@ -57,19 +109,115 @@ def listar_contatos(
         )
         stmt_base = stmt_base.where(filtro)
 
-    # COUNT com o mesmo filtro para calcular total real
+    # ------------------------------------------------------------------
+    # Filtros avancados (TASK-05 / RF-06)
+    # ------------------------------------------------------------------
+    # Aplicados como AND adicional sobre `stmt_base`. Cada filtro e
+    # idempotente: se o parametro for None/False, o `where` nao e
+    # adicionado e a consulta segue inalterada.
+
+    # `empresa` — busca parcial case-insensitive. Normalizamos o termo
+    # aqui (defesa em profundidade; o schema ContatoFilterParams ja
+    # remove espacos em branco quando chamado pelo router).
+    if empresa:
+        termo_empresa = empresa.strip()
+        if termo_empresa:
+            stmt_base = stmt_base.where(
+                Contato.empresa.ilike(f"%{termo_empresa}%")
+            )
+
+    # Datas inclusivas. Convertemos `date` -> `datetime` (00:00:00 e
+    # 23:59:59.999999 respectivamente) para garantir que registros
+    # cujo `criado_em` armazena hora/minuto sejam incluidos quando
+    # caem no mesmo dia das bordas do intervalo.
+    if criado_desde is not None:
+        # Inclusivo: >= 00:00:00 do dia.
+        limite_inferior = datetime.combine(criado_desde, time.min)
+        stmt_base = stmt_base.where(Contato.criado_em >= limite_inferior)
+
+    if criado_ate is not None:
+        # Inclusivo: <= 23:59:59.999999 do dia.
+        limite_superior = datetime.combine(criado_ate, time.max)
+        stmt_base = stmt_base.where(Contato.criado_em <= limite_superior)
+
+    # `sem_email` / `sem_telefone`: registros sem o respectivo campo.
+    # Tratamos NULL OU string vazia como "ausente" — alinhado com a
+    # validacao do schema que normaliza "" para None ao persistir, mas
+    # historicamente alguns registros podem ter "" no banco.
+    if sem_email:
+        stmt_base = stmt_base.where(
+            or_(Contato.email == None, Contato.email == "")  # noqa: E711
+        )
+
+    if sem_telefone:
+        stmt_base = stmt_base.where(
+            or_(Contato.telefone == None, Contato.telefone == "")  # noqa: E711
+        )
+
+    # COUNT com o mesmo filtro (incluindo os filtros avancados) para calcular total real
     stmt_count = select(func.count()).select_from(stmt_base.subquery())
     total: int = db.execute(stmt_count).scalar_one()
 
-    # Ordenação no banco (RN-F2-01) — aplicada antes do offset/limit
-    coluna = colunas_ordenacao[sort_by]
-    ordem = coluna.asc() if sort_order == "asc" else coluna.desc()
+    # Ordenacao via getattr — apos validacao contra allowlist (RNF-03:
+    # proibida concatenacao de string em SQL; `getattr` resolve para um
+    # InstrumentedAttribute do SQLAlchemy, nao para SQL bruto).
+    coluna = getattr(Contato, sort_by_str)
+    ordem = coluna.asc() if sort_order_str == "asc" else coluna.desc()
 
     # Consulta paginada com ordenação
     stmt_paginada = stmt_base.order_by(ordem).offset(skip).limit(limit)
     items = list(db.execute(stmt_paginada).scalars().all())
 
     return items, total
+
+
+def listar_contatos_para_export(
+    db: Session,
+    busca: str | None = None,
+    sort_by: SortByContato | str = SortByContato.criado_em,
+    sort_order: SortOrder | str = SortOrder.desc,
+    empresa: str | None = None,
+    criado_desde: date | None = None,
+    criado_ate: date | None = None,
+    sem_email: bool | None = None,
+    sem_telefone: bool | None = None,
+) -> list[Contato]:
+    """Versao SEM paginacao da listagem — usada pelo endpoint de export
+    (TASK-06 / RF-07 a RF-10).
+
+    Reutiliza EXATAMENTE os mesmos predicados (busca, filtros avancados,
+    ordenacao, exclusao de soft-deleted) da `listar_contatos`, mas
+    deliberadamente IGNORA `skip` e `limit` (RF-08: exporta todos os
+    registros que casam com a query atual).
+
+    Soft-deleted nao entra (RF-09) — herdado do filtro base
+    `deletado_em IS NULL` da `listar_contatos` (definido na propria
+    funcao via `Contato.deletado_em == None`).
+
+    Estrategia: chamamos `listar_contatos` com `limit` muito grande para
+    nao duplicar logica. Esta abordagem mantem 1 unico ponto de
+    construcao da query (DRY) — qualquer ajuste futuro em filtros/sort
+    fica refletido automaticamente no export.
+    """
+    # 2_000_000 e um teto muito superior ao RNF-02 (50k linhas), evitando
+    # truncar exports legitimos. Caso o ambiente cresca alem desse limite,
+    # a melhor abordagem futura sera substituir esta chamada por um
+    # generator que faz cursor server-side — registrar como item de
+    # backlog se aparecer.
+    items, _total = listar_contatos(
+        db,
+        busca=busca,
+        skip=0,
+        limit=2_000_000,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        empresa=empresa,
+        criado_desde=criado_desde,
+        criado_ate=criado_ate,
+        sem_email=sem_email,
+        sem_telefone=sem_telefone,
+    )
+    return items
 
 
 def buscar_contato(db: Session, id: int) -> Contato:

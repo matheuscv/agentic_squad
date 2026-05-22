@@ -14,3 +14,6 @@ httpx
 python-multipart
 slowapi>=0.1.9
 bandit>=1.7.5
+# Exportacao XLSX (TASK-06 / RF-07 a RF-10). Versao 3.1.x e estavel e
+# amplamente suportada em Python 3.11+; sem dependencia transitiva nativa.
+openpyxl>=3.1.2,<4
