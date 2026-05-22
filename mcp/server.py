@@ -138,12 +138,4 @@ def excluir_contato(id: int) -> str:
 
 
 if __name__ == "__main__":
-    transport = os.getenv("MCP_TRANSPORT", "stdio")
-    if transport == "http":
-        mcp.run(
-            transport="streamable-http",
-            host="0.0.0.0",
-            port=int(os.getenv("PORT", "8001")),
-        )
-    else:
-        mcp.run()
+    mcp.run()
