@@ -61,10 +61,11 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 
 app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
-# CORS: permite apenas a origem do frontend em desenvolvimento
+# CORS: origens lidas da variável CORS_ORIGINS (separadas por vírgula).
+# Em produção, definir CORS_ORIGINS com a URL do Vercel no painel do Render.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3002"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

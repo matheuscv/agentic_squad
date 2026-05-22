@@ -17,6 +17,12 @@ from app.models.contato import Contato  # noqa: E402, F401
 # Objeto de configuração do alembic (lê alembic.ini)
 config = context.config
 
+# Sobrescreve a URL do alembic.ini com DATABASE_URL do ambiente (se definida).
+# Necessário para que o Render/produção use PostgreSQL em vez do SQLite local.
+_db_url = os.environ.get("DATABASE_URL")
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
+
 # Configura logging a partir do alembic.ini
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -27,14 +33,15 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     """Executa migrações em modo offline (sem conexão ativa)."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = config.get_main_option("sqlalchemy.url") or ""
+    # render_as_batch só é necessário para SQLite (não suporta ALTER TABLE completo)
+    render_as_batch = url.startswith("sqlite")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        # SQLite não suporta ALTER TABLE completo; render_as_batch contorna isso
-        render_as_batch=True,
+        render_as_batch=render_as_batch,
     )
 
     with context.begin_transaction():
@@ -49,12 +56,14 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
+    _url = config.get_main_option("sqlalchemy.url") or ""
+    render_as_batch = _url.startswith("sqlite")
+
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # SQLite não suporta ALTER TABLE completo; render_as_batch contorna isso
-            render_as_batch=True,
+            render_as_batch=render_as_batch,
         )
 
         with context.begin_transaction():
