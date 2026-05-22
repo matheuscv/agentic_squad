@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plano de Deploy — Opção A: Vercel + Render + Supabase</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header {
+      background: #064e3b;
+      color: #fff;
+      border-radius: 12px;
+      padding: 2rem 2.5rem;
+      margin-bottom: 2rem;
+      border-left: 6px solid #34d399;
+    }
+    header h1 { font-size: 1.8rem; margin-bottom: .4rem; }
+    header .subtitle { font-size: 1rem; color: #6ee7b7; margin-bottom: .6rem; }
+    header .meta { font-size: .85rem; opacity: .65; }
+    .tag-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .8rem; }
+    .tag {
+      display: inline-block;
+      border-radius: 20px;
+      padding: .25rem .9rem;
+      font-size: .78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag-green  { background: #22c55e; color: #1a1a2e; }
+    .tag-teal   { background: #14b8a6; color: #fff; }
+    .tag-blue   { background: #3b82f6; color: #fff; }
+    .tag-violet { background: #8b5cf6; color: #fff; }
+    .tag-yellow { background: #fbbf24; color: #1a1a2e; }
+    .tag-orange { background: #f97316; color: #fff; }
+    .tag-gray   { background: #94a3b8; color: #fff; }
+
+    /* Alertas */
+    .alert {
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 1.5rem;
+      font-size: .9rem;
+      line-height: 1.6;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .alert-success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+    .alert-warn    { background: #fffbeb; border: 1px solid #fbbf24; color: #92400e; }
+    .alert-icon    { font-size: 1.3rem; flex-shrink: 0; margin-top: .1rem; }
+
+    /* Seções */
+    .section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .section h2 {
+      font-size: 1.15rem;
+      margin-bottom: 1.2rem;
+      color: #0f172a;
+      border-bottom: 2px solid #f1f5f9;
+      padding-bottom: .6rem;
+    }
+
+    /* Etapas */
+    .etapa {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-left: 5px solid;
+    }
+    .etapa-1 { border-color: #6366f1; }
+    .etapa-2 { border-color: #0ea5e9; }
+    .etapa-3 { border-color: #8b5cf6; }
+    .etapa-4 { border-color: #f97316; }
+    .etapa-5 { border-color: #22c55e; }
+    .etapa-6 { border-color: #64748b; }
+
+    .etapa-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+      flex-wrap: wrap;
+    }
+    .etapa-header h2 { font-size: 1.1rem; color: #0f172a; }
+    .etapa-meta { font-size: .82rem; color: #6b7280; text-align: right; }
+    .etapa-meta strong { display: block; color: #374151; }
+
+    .sub { margin-bottom: 1.2rem; }
+    .sub h3 {
+      font-size: .95rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: .5rem;
+    }
+    .sub p, .sub li {
+      font-size: .88rem;
+      color: #4b5563;
+      line-height: 1.65;
+    }
+    .sub ul { padding-left: 1.3rem; margin-top: .3rem; }
+    .sub ul li { margin-bottom: .25rem; }
+
+    /* Badges executor */
+    .executor {
+      display: inline-block;
+      border-radius: 6px;
+      padding: .15rem .6rem;
+      font-size: .72rem;
+      font-weight: 700;
+    }
+    .exec-claude   { background: #ede9fe; color: #6d28d9; }
+    .exec-voce     { background: #dcfce7; color: #166534; }
+    .exec-ambos    { background: #dbeafe; color: #1e40af; }
+    .exec-opcional { background: #f1f5f9; color: #64748b; }
+
+    code {
+      background: #f1f5f9;
+      color: #7c3aed;
+      border-radius: 4px;
+      padding: .1em .4em;
+      font-size: .84em;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      font-size: .83rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      overflow-x: auto;
+      margin-top: .6rem;
+      line-height: 1.6;
+    }
+
+    /* Tabelas */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+      margin-top: .6rem;
+    }
+    thead th {
+      background: #f8fafc;
+      text-align: left;
+      padding: .6rem .8rem;
+      border-bottom: 2px solid #e5e7eb;
+      color: #374151;
+      font-size: .82rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    tbody td {
+      padding: .65rem .8rem;
+      border-bottom: 1px solid #f3f4f6;
+      color: #4b5563;
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #f9fafb; }
+
+    /* Plataformas destaque */
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-top: .8rem;
+    }
+    .platform-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 1.2rem 1.3rem;
+    }
+    .platform-card h3 {
+      font-size: .95rem;
+      font-weight: 700;
+      margin-bottom: .5rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .platform-card p { font-size: .84rem; color: #6b7280; line-height: 1.5; }
+
+    /* Arquitetura */
+    .arch-box {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 1.4rem 1.6rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .83rem;
+      line-height: 1.75;
+      margin-top: .6rem;
+      overflow-x: auto;
+    }
+    .arch-highlight { color: #34d399; font-weight: 700; }
+    .arch-url       { color: #60a5fa; }
+    .arch-comment   { color: #64748b; }
+    .arch-warn      { color: #fbbf24; }
+
+    /* Resumo */
+    .summary-bar {
+      background: #064e3b;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .summary-bar h2 { color: #fff; font-size: 1.1rem; margin-bottom: 1rem; }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .6rem 0;
+      border-bottom: 1px solid #065f46;
+      font-size: .88rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row .label { color: #6ee7b7; flex: 1; min-width: 200px; }
+    .summary-row .value { color: #f1f5f9; font-weight: 600; }
+    .summary-row .exec-tag { font-size: .75rem; }
+
+    footer {
+      text-align: center;
+      font-size: .8rem;
+      color: #9ca3af;
+      padding-top: 1rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <h1>Plano de Deploy — Opção A: Vercel + Render + Supabase</h1>
+    <div class="subtitle">Solução gratuita: Frontend Next.js + Backend FastAPI + PostgreSQL</div>
+    <div class="meta">Gerado em 21 de maio de 2026 &nbsp;|&nbsp; Projeto: Agentic Squad — Contact Management App</div>
+    <div class="tag-row">
+      <span class="tag tag-green">$0 / mês</span>
+      <span class="tag tag-teal">Vercel + Render + Supabase</span>
+      <span class="tag tag-blue">FastAPI + Next.js 14</span>
+      <span class="tag tag-yellow">Sem cartão de crédito</span>
+    </div>
+  </header>
+
+  <!-- ALERTA CUSTO ZERO -->
+  <div class="alert alert-success">
+    <div class="alert-icon">✅</div>
+    <div>
+      <strong>Custo: $0 / mês — sem necessidade de cartão de crédito</strong><br>
+      Esta solução combina os free tiers de três plataformas. Nenhuma exige pagamento para os limites cobertos por este projeto.
+      A única limitação relevante é a <strong>hibernação do backend</strong> no Render após 15 minutos de inatividade — a primeira requisição após hibernação demora ~20–30 segundos.
+    </div>
+  </div>
+
+  <div class="alert alert-warn">
+    <div class="alert-icon">⚠️</div>
+    <div>
+      <strong>Atenção: hibernação do Render e pausa do Supabase</strong><br>
+      O backend no <strong>Render free tier hiberna</strong> após 15 minutos sem requisição. Para uso frequente, considere upgrade para o plano Starter (~$7/mês).
+      O <strong>Supabase pausa o projeto</strong> após 1 semana de inatividade — manter o app em uso evita isso. Ambos reiniciam automaticamente na próxima requisição.
+    </div>
+  </div>
+
+  <!-- PREMISSAS -->
+  <div class="section">
+    <h2>Premissas</h2>
+
+    <div class="sub">
+      <h3>Contas externas a criar antes de iniciar</h3>
+      <div class="platform-grid">
+        <div class="platform-card">
+          <h3><span class="tag tag-violet" style="font-size:.72rem;">P1</span> Supabase</h3>
+          <p><code>supabase.com</code><br>PostgreSQL gratuito (500MB, 2 projetos). Login com GitHub. <strong>Não exige cartão.</strong></p>
+        </div>
+        <div class="platform-card">
+          <h3><span class="tag tag-orange" style="font-size:.72rem;">P2</span> Render</h3>
+          <p><code>render.com</code><br>Backend FastAPI. 750h/mês free (1 serviço ativo o mês todo). Login com GitHub. <strong>Não exige cartão.</strong></p>
+        </div>
+        <div class="platform-card">
+          <h3><span class="tag tag-blue" style="font-size:.72rem;">P3</span> Vercel</h3>
+          <p><code>vercel.com</code><br>Frontend Next.js. CDN global, deploy automático, ilimitado para projetos pessoais. Login com GitHub. <strong>Não exige cartão.</strong></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub" style="margin-top:1rem;">
+      <h3>Premissas técnicas</h3>
+      <ul>
+        <li><strong>P4</strong> — O repositório deve estar no <strong>GitHub</strong> (público ou privado — as três plataformas suportam ambos)</li>
+        <li><strong>P5</strong> — Branch principal (<code>master</code>) é a branch de produção. Push nela = novo deploy automático no Render (backend) e no Vercel (frontend)</li>
+        <li><strong>P6</strong> — O banco atual é SQLite local (<code>contatos.db</code>). Os dados de desenvolvimento <strong>não serão migrados</strong> — o banco Supabase iniciará vazio e as migrations do Alembic criarão as tabelas automaticamente</li>
+        <li><strong>P7</strong> — Será necessário criar o <strong>primeiro usuário administrador</strong> manualmente após o deploy (o sistema possui autenticação JWT sem cadastro público de admin)</li>
+        <li><strong>P8</strong> — O backend no Render free tier <strong>hiberna após 15 minutos sem requisição</strong>. A primeira requisição após hibernação demora ~20–30 segundos. Para uso pessoal/demo, isso é aceitável</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ARQUITETURA -->
+  <div class="section">
+    <h2>Arquitetura final</h2>
+    <div class="arch-box">
+Usuário no browser
+  │
+  ▼
+<span class="arch-highlight">Vercel</span> (frontend Next.js)
+  └── URL: <span class="arch-url">https://seu-app.vercel.app</span>  <span class="arch-comment">(sempre ativo, CDN global)</span>
+       │ NEXT_PUBLIC_API_URL  <span class="arch-comment">(internet pública)</span>
+       ▼
+<span class="arch-highlight">Render</span> (backend FastAPI / uvicorn)
+  └── URL: <span class="arch-url">https://seu-backend.onrender.com</span>  <span class="arch-warn">(hiberna após 15min)</span>
+       │ DATABASE_URL  <span class="arch-comment">(internet pública → SSL)</span>
+       ▼
+<span class="arch-highlight">Supabase</span> (PostgreSQL 15)
+  └── URL: <span class="arch-url">postgresql://...supabase.co:5432/postgres</span>  <span class="arch-comment">(sempre ativo)</span></div>
+    <p style="margin-top:.8rem;font-size:.85rem;color:#6b7280;">
+      <strong>Nota:</strong> nesta opção, a comunicação entre o backend (Render) e o banco (Supabase) ocorre pela <strong>internet pública com SSL</strong>,
+      diferentemente do Railway onde os serviços se comunicam via rede privada interna.
+      Para o volume de dados deste projeto, essa diferença não é perceptível na prática.
+    </p>
+  </div>
+
+  <!-- ETAPA 1 -->
+  <div class="etapa etapa-1">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 1 — Preparação local do código</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Garantir que o código esteja pronto para produção antes de qualquer deploy</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~30–60 min</strong>
+        <span class="executor exec-claude">Claude Code executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>1.1 — Ajuste do <code>alembic/env.py</code> para usar variável de ambiente</h3>
+      <p>O Alembic atualmente tem a URL SQLite hardcoded no <code>alembic.ini</code>. Será alterado o <code>alembic/env.py</code> para ler <code>DATABASE_URL</code> do ambiente em tempo de execução. Sem esse ajuste, as migrations falham ou criam tabelas no arquivo SQLite local em vez do PostgreSQL do Supabase.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.2 — Adicionar CORS ao <code>app/main.py</code></h3>
+      <p>O frontend no Vercel (domínio <code>*.vercel.app</code>) precisa de permissão explícita para chamar a API no Render. Será adicionado o middleware <code>CORSMiddleware</code> do FastAPI, lendo <code>CORS_ORIGINS</code> de variável de ambiente. Sem isso, o browser bloqueia todas as requisições — o app fica inacessível para o usuário final.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.3 — Criar <code>Procfile</code> no diretório <code>backend/</code></h3>
+      <p>Render detecta o <code>Procfile</code> automaticamente para saber como iniciar a aplicação Python.</p>
+      <pre>web: uvicorn app.main:app --host 0.0.0.0 --port $PORT</pre>
+    </div>
+
+    <div class="sub">
+      <h3>1.4 — Criar arquivo <code>.env.example</code> em <code>backend/</code> e <code>frontend/</code></h3>
+      <p>Documentação de referência com todas as variáveis necessárias (sem valores reais). Servirá como guia ao configurar as variáveis no painel do Render e do Vercel.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.5 — Verificar <code>.gitignore</code></h3>
+      <p>Confirmar que <code>.env</code> e <code>contatos.db</code> não estão sendo versionados. Previne exposição acidental de segredos no GitHub.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.6 — Commit e push das alterações</h3>
+      <p>Criar commit com todas as mudanças de preparação e push para <code>master</code> no GitHub.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 2 -->
+  <div class="etapa etapa-2">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 2 — Configuração do banco de dados (Supabase)</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Criar e configurar o PostgreSQL de produção</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~10–15 min</strong>
+        <span class="executor exec-voce">Você executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>2.1 — Criar projeto no Supabase</h3>
+      <ul>
+        <li>Acessar <code>supabase.com</code> → "New Project"</li>
+        <li>Escolher nome (ex.: <code>agentic-squad-prod</code>)</li>
+        <li>Definir senha do banco (guardar em local seguro)</li>
+        <li>Selecionar região mais próxima: <strong>South America (São Paulo)</strong> se disponível, senão US East</li>
+        <li>Aguardar provisionamento (~2 minutos)</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.2 — Obter a connection string</h3>
+      <ul>
+        <li>No painel Supabase: <strong>Project Settings → Database → Connection string → URI</strong></li>
+        <li>Copiar a URL no formato: <code>postgresql://postgres:[SENHA]@db.xxxx.supabase.co:5432/postgres</code></li>
+        <li><strong>Guardar essa string</strong> — será usada como <code>DATABASE_URL</code> no Render</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.3 — Atenção ao modo de conexão</h3>
+      <p>O Supabase usa <strong>connection pooling</strong> com Supavisor. Para Alembic/migrations, usar a string com <strong>Session mode (porta 5432)</strong>, pois migrations precisam de transações longas. Para a aplicação, qualquer modo funciona.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 3 -->
+  <div class="etapa etapa-3">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 3 — Deploy do backend (Render)</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Colocar a API FastAPI online no Render</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~20–30 min</strong>
+        <span class="executor exec-voce">Você executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>3.1 — Criar Web Service no Render</h3>
+      <p><code>render.com</code> → "New" → "Web Service" → conectar GitHub e selecionar o repositório. Configurar:</p>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Name</td><td><code>agentic-squad-backend</code></td></tr>
+          <tr><td>Root Directory</td><td><code>backend</code></td></tr>
+          <tr><td>Environment</td><td>Python 3</td></tr>
+          <tr><td>Build Command</td><td><code>pip install -r requirements.txt</code></td></tr>
+          <tr><td>Start Command</td><td><code>uvicorn app.main:app --host 0.0.0.0 --port $PORT</code></td></tr>
+          <tr><td>Instance Type</td><td>Free</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>3.2 — Configurar variáveis de ambiente no Render</h3>
+      <table>
+        <thead><tr><th>Variável</th><th>Valor</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td><code>DATABASE_URL</code></td><td>Connection string do Supabase</td><td>Copiada na Etapa 2.2</td></tr>
+          <tr><td><code>SECRET_KEY</code></td><td>string aleatória 64 chars</td><td><code>python -c "import secrets; print(secrets.token_hex(32))"</code></td></tr>
+          <tr><td><code>ENV</code></td><td><code>production</code></td><td>Ativa logs JSON estruturados</td></tr>
+          <tr><td><code>ALGORITHM</code></td><td><code>HS256</code></td><td>Algoritmo JWT</td></tr>
+          <tr><td><code>ACCESS_TOKEN_EXPIRE_MINUTES</code></td><td><code>60</code></td><td>Expiração do token</td></tr>
+          <tr><td><code>CORS_ORIGINS</code></td><td><em>preencher após Etapa 4</em></td><td>URL do frontend no Vercel</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>3.3 — Primeiro deploy e execução das migrations</h3>
+      <p>Clicar "Deploy" no Render e aguardar o build (~3–5 minutos na primeira vez). Após build bem-sucedido, executar as migrations via <strong>Render Shell</strong>:</p>
+      <pre>alembic upgrade head</pre>
+      <p style="margin-top:.5rem;">Isso criará todas as tabelas no banco Supabase. O projeto possui 5 migrations: <em>initial, deletado_em, auditoria, indices, indices sort/filter</em>.</p>
+    </div>
+
+    <div class="sub">
+      <h3>3.4 — Verificar a API</h3>
+      <p>Acessar <code>https://agentic-squad-backend.onrender.com/docs</code> → Swagger UI deve aparecer. Confirmar que a API está respondendo sem erros.</p>
+    </div>
+
+    <div class="sub">
+      <h3>3.5 — Criar o primeiro usuário administrador</h3>
+      <p>Via Render Shell no serviço backend, executar script de seed ou chamada ao endpoint de criação de usuário. O banco inicia vazio — sem esse passo não é possível fazer login no sistema.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 4 -->
+  <div class="etapa etapa-4">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 4 — Deploy do frontend (Vercel)</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Colocar o frontend Next.js online no Vercel</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~10–15 min</strong>
+        <span class="executor exec-voce">Você executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>4.1 — Importar projeto no Vercel</h3>
+      <p><code>vercel.com</code> → "Add New" → "Project" → selecionar repositório GitHub. Configurar:</p>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Root Directory</td><td><code>frontend</code></td></tr>
+          <tr><td>Framework Preset</td><td>Next.js (detectado automaticamente)</td></tr>
+          <tr><td>Build Command</td><td><code>npm run build</code> (padrão)</td></tr>
+          <tr><td>Output Directory</td><td><code>.next</code> (padrão)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>4.2 — Configurar variável de ambiente no Vercel</h3>
+      <table>
+        <thead><tr><th>Variável</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td><code>NEXT_PUBLIC_API_URL</code></td><td>URL do Render — ex.: <code>https://agentic-squad-backend.onrender.com</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>4.3 — Deploy e obtenção da URL</h3>
+      <p>Clicar "Deploy". Aguardar ~2–3 minutos. Vercel gera a URL final: <code>https://seu-app.vercel.app</code>. Anotar essa URL — será usada para atualizar o CORS do backend.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 5 -->
+  <div class="etapa etapa-5">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 5 — Conexão e validação completa</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Conectar frontend e backend e validar o sistema completo</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~15–20 min</strong>
+        <span class="executor exec-ambos">Você + Claude Code</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>5.1 — Atualizar CORS no Render</h3>
+      <p>Painel Render → serviço backend → Environment → atualizar <code>CORS_ORIGINS</code> com a URL real do Vercel: <code>https://seu-app.vercel.app</code>. Render fará redeploy automático do backend.</p>
+    </div>
+
+    <div class="sub">
+      <h3>5.2 — Smoke test completo</h3>
+      <table>
+        <thead><tr><th>#</th><th>Teste</th><th>Resultado esperado</th></tr></thead>
+        <tbody>
+          <tr><td>T1</td><td>Acessar <code>https://seu-app.vercel.app</code></td><td>Página de login carrega sem erros</td></tr>
+          <tr><td>T2</td><td>Login com usuário admin (criado na Etapa 3.5)</td><td>Redireciona para /contatos</td></tr>
+          <tr><td>T3</td><td>Criar um novo contato</td><td>Contato aparece na lista imediatamente</td></tr>
+          <tr><td>T4</td><td>Buscar / filtrar / ordenar contatos</td><td>Resultados corretos</td></tr>
+          <tr><td>T5</td><td>Exportar CSV e XLSX</td><td>Download inicia corretamente</td></tr>
+          <tr><td>T6</td><td>Logout + tentativa de rota protegida</td><td>Redireciona para /login</td></tr>
+          <tr><td>T7</td><td>Login com usuário não-admin</td><td>Botões de editar/excluir não aparecem</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>5.3 — Verificar logs</h3>
+      <ul>
+        <li><strong>Render:</strong> aba "Logs" → verificar que não há erros nas requisições reais</li>
+        <li><strong>Supabase:</strong> aba "Database → Logs" → confirmar queries chegando ao banco</li>
+        <li><strong>Vercel:</strong> aba "Functions" → verificar que o build Next.js não tem warnings críticos</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ETAPA 6 -->
+  <div class="etapa etapa-6">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 6 — Hardening básico <em>(opcional, pós-validação)</em></h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Melhorias de segurança e operabilidade — não bloqueante</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~30–60 min</strong>
+        <span class="executor exec-opcional">Opcional</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>6.1 — Domínio customizado</h3>
+      <p>Vercel permite adicionar domínio próprio gratuitamente (precisaria comprar o domínio ~R$40–80/ano). Render também permite domínio customizado no free tier.</p>
+    </div>
+
+    <div class="sub">
+      <h3>6.2 — GitHub Actions para CI</h3>
+      <p>Adicionar workflow que roda <code>pytest</code> (backend) e <code>next lint</code> + <code>jest</code> (frontend) a cada PR. Bloqueia merge de código quebrado antes de chegar à produção. Render e Vercel já fazem deploy automático — o CI seria uma camada de qualidade adicional.</p>
+    </div>
+
+    <div class="sub">
+      <h3>6.3 — Health check no Render</h3>
+      <p>Configurar o endpoint de health check no painel do Render. O Render monitora automaticamente e reinicia o serviço se ficar unhealthy. Também reduz o tempo de cold start após hibernação em alguns cenários.</p>
+    </div>
+
+    <div class="sub">
+      <h3>6.4 — Keep-alive para evitar hibernação <em>(opcional)</em></h3>
+      <p>Serviços como UptimeRobot (gratuito) podem fazer ping no backend a cada 14 minutos, evitando a hibernação do Render free tier. Não é necessário se o uso esporádico for aceitável.</p>
+    </div>
+  </div>
+
+  <!-- ALTERAÇÕES DE CÓDIGO -->
+  <div class="section">
+    <h2>Alterações de código necessárias</h2>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:.8rem;">Apenas 4 arquivos serão criados ou modificados na Etapa 1:</p>
+    <table>
+      <thead>
+        <tr><th>Arquivo</th><th>Tipo</th><th>Mudança</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>backend/alembic/env.py</code></td>
+          <td><span class="tag tag-yellow" style="font-size:.72rem;">Modificação</span></td>
+          <td>Ler <code>DATABASE_URL</code> do ambiente para sobrepor a URL do <code>alembic.ini</code></td>
+        </tr>
+        <tr>
+          <td><code>backend/app/main.py</code></td>
+          <td><span class="tag tag-yellow" style="font-size:.72rem;">Modificação</span></td>
+          <td>Adicionar <code>CORSMiddleware</code> com <code>CORS_ORIGINS</code> do ambiente</td>
+        </tr>
+        <tr>
+          <td><code>backend/Procfile</code></td>
+          <td><span class="tag tag-green" style="font-size:.72rem;">Criação</span></td>
+          <td>Start command para o Render: <code>uvicorn app.main:app --host 0.0.0.0 --port $PORT</code></td>
+        </tr>
+        <tr>
+          <td><code>backend/.env.example</code></td>
+          <td><span class="tag tag-green" style="font-size:.72rem;">Criação</span></td>
+          <td>Documentação das variáveis necessárias (sem valores reais)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- RESUMO FINAL -->
+  <div class="summary-bar">
+    <h2>Resumo das etapas</h2>
+    <div class="summary-row">
+      <span class="label">Etapa 1 — Preparação local do código</span>
+      <span class="value">~30–60 min</span>
+      <span class="executor exec-claude exec-tag">Claude Code</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 2 — Banco de dados no Supabase</span>
+      <span class="value">~10–15 min</span>
+      <span class="executor exec-voce exec-tag">Você</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 3 — Deploy backend no Render</span>
+      <span class="value">~20–30 min</span>
+      <span class="executor exec-voce exec-tag">Você</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 4 — Deploy frontend no Vercel</span>
+      <span class="value">~10–15 min</span>
+      <span class="executor exec-voce exec-tag">Você</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 5 — Conexão e validação completa</span>
+      <span class="value">~15–20 min</span>
+      <span class="executor exec-ambos exec-tag">Você + Claude</span>
+    </div>
+    <div class="summary-row" style="border-top:1px solid #065f46;padding-top:.8rem;margin-top:.4rem;">
+      <span class="label" style="color:#f1f5f9;font-weight:700;">Total estimado (Etapas 1–5)</span>
+      <span class="value" style="color:#34d399;font-size:1.05rem;">~1h25min – 2h00min</span>
+      <span></span>
+    </div>
+  </div>
+
+  <!-- LIMITAÇÕES -->
+  <div class="section">
+    <h2>Limitações do plano gratuito a conhecer</h2>
+    <table>
+      <thead><tr><th>Limitação</th><th>Impacto</th><th>Solução futura</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Backend hiberna após 15min de inatividade (Render)</td>
+          <td>1ª requisição após hibernação demora ~20–30s</td>
+          <td>Upgrade Render Starter ($7/mês) ou keep-alive gratuito via UptimeRobot</td>
+        </tr>
+        <tr>
+          <td>Supabase: 500MB de storage</td>
+          <td>Suficiente para centenas de milhares de contatos</td>
+          <td>Upgrade Supabase Pro ($25/mês)</td>
+        </tr>
+        <tr>
+          <td>Supabase pausa projeto após 1 semana sem atividade</td>
+          <td>Banco fica offline se não acessado — reinicia na próxima requisição</td>
+          <td>Manter em uso regular ou fazer upgrade</td>
+        </tr>
+        <tr>
+          <td>Render free: 750h/mês por conta</td>
+          <td>Suficiente para 1 serviço ativo o mês todo (744h)</td>
+          <td>Não há impacto para 1 backend</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- COMPARATIVO -->
+  <div class="section">
+    <h2>Comparativo com a opção Railway MVP</h2>
+    <table>
+      <thead><tr><th>Critério</th><th>Vercel + Render + Supabase</th><th>Railway MVP</th></tr></thead>
+      <tbody>
+        <tr><td>Custo mensal</td><td><strong style="color:#16a34a;">$0</strong></td><td>$5 USD fixo (~R$28–30)</td></tr>
+        <tr><td>Hibernação do backend</td><td><span style="color:#d97706;">⚠️ Hiberna após 15min</span></td><td><span style="color:#16a34a;">✅ Não hiberna</span></td></tr>
+        <tr><td>1ª requisição (cold start)</td><td><span style="color:#d97706;">~20–30s após hibernação</span></td><td><span style="color:#16a34a;">Instantâneo</span></td></tr>
+        <tr><td>Número de plataformas</td><td>3 plataformas, 3 dashboards</td><td>1 plataforma, 1 dashboard</td></tr>
+        <tr><td>Complexidade de setup</td><td>Maior (3 contas, 3 configs)</td><td>Menor (tudo junto)</td></tr>
+        <tr><td>Comunicação backend ↔ banco</td><td>Internet pública (SSL)</td><td>Rede privada interna</td></tr>
+        <tr><td>Cartão de crédito necessário</td><td><span style="color:#16a34a;">✅ Não</span></td><td><span style="color:#dc2626;">❌ Sim</span></td></tr>
+        <tr><td>Pausa do banco por inatividade</td><td><span style="color:#d97706;">⚠️ Sim (Supabase, 1 semana)</span></td><td><span style="color:#16a34a;">✅ Não</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    Plano gerado em 21 de maio de 2026 &nbsp;|&nbsp; Agentic Squad — Contact Management App &nbsp;|&nbsp; Opção A: Vercel + Render + Supabase
+  </footer>
+
+</div>
+</body>
+</html>

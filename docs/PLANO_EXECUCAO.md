@@ -1,423 +1,487 @@
-# Plano de Execução — Fase B.1 + B.2
+# Plano de Execucao — Fase D parcial (D.1, D.3, D.4, D.5)
 
-> **Escopo desta entrega:** somente B.1 (Logging estruturado JSON) e B.2 (Tratamento centralizado de exceções).
-> Nenhuma alteração de contrato público, nenhuma feature funcional nova, nenhum trabalho em `frontend/`.
+## Visao Geral
 
----
+Este plano operacionaliza as 4 entregas do PRD Fase D parcial (Ordenacao D.1, Mascara
+telefone D.3, Filtros avancados D.4, Exportar CSV/XLSX D.5) sobre a stack atual
+(FastAPI + SQLAlchemy 2.x + SQLite no backend; Next.js 14 + React + Tailwind + RHF + Zod
+no frontend). A estrategia e dividir o trabalho em 4 fases sequenciais: **Fase 0** cria
+a base de dados (migration Alembic com indices) e o hook `useDebounce` consolidado, que
+sao pre-requisitos minimos das demais entregas; **Fase 1** implementa as alteracoes de
+backend (4 tasks majoritariamente paralelizaveis entre si depois da Fase 0); **Fase 2**
+cobre o frontend (4 tasks paralelizaveis entre si depois que o backend correspondente
+estiver pronto); **Fase 3** fecha com polimento (a11y, documentacao OpenAPI, smoke
+test e ajustes regressivos).
 
-## Visão Geral
-
-### Objetivo
-Habilitar observabilidade operacional do backend FastAPI: toda requisição rastreável por `request_id`, toda exceção convertida em resposta HTTP semanticamente correta com stack trace registrado em log estruturado, eliminando o `except Exception: pass` existente em `backend/app/main.py`.
-
-### Premissas
-- Stack mantida: Python 3.11+, FastAPI, SQLAlchemy, pytest.
-- Biblioteca de logging JSON pré-decidida pelo PRD: `python-json-logger` (a ser pinada em `backend/requirements.txt`).
-- Variável `ENV` controla o formato (texto em `development`, JSON em `production`) e ainda **não existe** em `backend/app/config.py` — precisa ser adicionada na TASK-01.
-- Propagação de contexto via `contextvars` da stdlib.
-- Suíte de testes existente (Fases 1, 3.1, 3.2) precisa permanecer 100% verde sem ajustes.
-- `python-json-logger` precisa estar instalado antes de o módulo de logging ser importado — adição ao `requirements.txt` é parte da TASK-01.
-
-### Sumário das fases
-| Fase | Conteúdo | Tasks |
-|------|----------|-------|
-| **Fase 1 — Fundações (paralelizável)** | Infra de logging + middleware (B.1) e hierarquia de exceções de domínio (B.2). Tasks independentes em arquivos diferentes. | TASK-01, TASK-02 |
-| **Fase 2 — Integração** | Wiring no `main.py`: registrar handlers usando o logger estruturado, plugar o middleware, eliminar `except Exception: pass`. | TASK-03, TASK-04 |
-| **Fase 3 — Refactor seletivo e cobertura de testes** | Substituir `HTTPException` ad-hoc por exceções de domínio em pontos claros; testes de middleware, handlers e redaction. | TASK-05, TASK-06, TASK-07 |
-| **Fase 4 — Refinamento / DoD** | Garantia de DoD (zero `print`, zero `except Exception: pass`, doc operacional). | TASK-08 |
-
----
+A paralelizacao maxima ocorre logo na Fase 0 (TASK-01 e TASK-02 sao 100% independentes
+em arquivos disjuntos) e novamente na Fase 1 (TASK-03, TASK-04 e TASK-05 podem rodar
+simultaneamente, com merge sequencial no router compartilhado; TASK-06 fica para
+quando TASK-03 e TASK-05 ja tiverem aterrado). O orquestrador tem espaco confortavel
+para acionar 2 dev-agents em paralelo desde o primeiro disparo.
 
 ## Stack Confirmada
-- **Linguagem:** Python 3.11+
-- **Framework:** FastAPI (mantido)
-- **Logging JSON:** `python-json-logger` (a ser pinado em `backend/requirements.txt`)
-- **Persistência:** SQLAlchemy (sem alterações)
-- **Testes:** `pytest`, `pytest-asyncio`, `httpx` (já em uso)
-- **Propagação de contexto:** `contextvars` (stdlib)
 
----
+- Linguagem backend: Python 3.11+
+- Framework backend: FastAPI + SQLAlchemy 2.x + Alembic
+- Persistencia: SQLite (existente)
+- Exportacao: stdlib `csv` + `openpyxl` + `StreamingResponse`
+- Linguagem frontend: TypeScript
+- Framework frontend: Next.js 14 + React + Tailwind
+- Formularios: react-hook-form + Zod + `react-input-mask`
+- Testes: pytest + httpx (backend); Jest + Testing Library (frontend)
 
-## Estrutura de Diretórios (após as tasks)
+## Estrutura de Diretorios Relevante
+
 ```
 backend/
+  alembic/
+    versions/                         # nova migration de indices (TASK-01)
   app/
-    config.py                 # editado: passa a expor ENV
-    logging_config.py         # NOVO (TASK-01) - setup do logger + filtros
-    middleware/
-      __init__.py             # NOVO (TASK-01)
-      request_context.py      # NOVO (TASK-01) - middleware request_id + duration
-    exceptions.py             # NOVO (TASK-02) - hierarquia de exceções de domínio
-    exception_handlers.py     # NOVO (TASK-03) - handlers globais FastAPI
-    main.py                   # editado (TASK-04): wiring + remoção do except pass
-    routers/
-      contatos.py             # editado (TASK-05): logger nomeado + refactor seletivo
-      usuarios.py             # editado (TASK-05): logger nomeado + refactor seletivo
-      auth.py                 # editado (TASK-05): logger nomeado
-    services/
-      contato_service.py      # editado (TASK-05): logger nomeado + raise tipado
-      usuario_service.py      # editado (TASK-05): logger nomeado + raise tipado
+    routers/contatos.py               # editado: sort, filtros, export endpoint
+    services/contato_service.py       # editado: ordenacao, filtros, query base
+    models/contato.py                 # somente leitura para mapping de colunas
+    schemas/contato.py                # editado: regex telefone + enums sort/filtros
+    exporters/                        # NOVO (TASK-06)
+      __init__.py
+      csv_exporter.py
+      xlsx_exporter.py
   tests/
-    test_logging_middleware.py     # NOVO (TASK-06)
-    test_exception_handlers.py     # NOVO (TASK-06)
-    test_log_redaction.py          # NOVO (TASK-07)
-  requirements.txt            # editado (TASK-01): + python-json-logger
+    test_contatos_sort.py             # NOVO (TASK-03)
+    test_contatos_telefone.py         # NOVO (TASK-04)
+    test_contatos_filtros.py          # NOVO (TASK-05)
+    test_contatos_export.py           # NOVO (TASK-06)
+    test_contatos_smoke_fase_d.py     # NOVO (TASK-11)
+frontend/
+  src/
+    app/contatos/page.tsx             # editado: querystring sort+filtros+export
+    components/
+      ContatoForm.tsx                 # editado: mascara telefone
+      ContatoTable.tsx                # editado: headers ordenaveis + aria-sort
+      ContatoFiltersPanel.tsx         # NOVO (TASK-09)
+      ContatoExportButton.tsx         # NOVO (TASK-10)
+    hooks/
+      useDebounce.ts                  # NOVO (TASK-02)
+    lib/schemas.ts                    # editado: regex telefone Zod
+    services/api.ts                   # editado: helpers sort/filter/export
+  __tests__/
+    useDebounce.test.ts               # NOVO (TASK-02)
+    contatos.sort.test.tsx            # NOVO (TASK-07)
+    contatoForm.telefone.test.tsx     # NOVO (TASK-08)
+    contatos.filtros.test.tsx         # NOVO (TASK-09)
+    contatos.export.test.tsx          # NOVO (TASK-10)
 docs/
-  OPERACAO_LOGS.md            # NOVO (TASK-08) - como ler logs em DEV/PROD
+  PLANO_EXECUCAO.md
 ```
 
-> Observação: caso o repositório já contenha `backend/app/middleware/__init__.py` (verificado durante a TASK-01), preservar o arquivo e apenas adicionar `request_context.py`.
+---
+
+## Fase 0 — Fundacao (DB + Hook)
+
+> Pre-requisitos minimos de D.1 / D.4 e do reuso de debounce nos filtros.
+> Duas tasks 100% independentes para o orquestrador disparar em 2 dev-agents.
+
+### TASK-01 — Migration Alembic com indices em colunas frequentes
+- **Objetivo**: Adicionar indices nao-unicos em `contatos.nome`, `contatos.email`,
+  `contatos.empresa`, `contatos.criado_em` para suportar ordenacao (D.1) e
+  filtros (D.4) com p95 < 300 ms ate 50k linhas (RNF-01).
+- **Arquivos a criar/editar**:
+  - Criar: `backend/alembic/versions/<rev>_indices_contatos_sort_filter.py`
+- **Descricao**: Gerar uma nova revisao Alembic adicionando indices nao-unicos
+  (`ix_contatos_nome`, `ix_contatos_email`, `ix_contatos_empresa`,
+  `ix_contatos_criado_em`). `downgrade()` deve dropar os indices criados. NAO
+  alterar `backend/app/models/contato.py` nesta task (decisao: indices via
+  migration pura, para minimizar conflito com tasks paralelas; refletir no
+  modelo fica como ajuste opcional na Fase 3 se necessario).
+- **Criterios de aceite**:
+  - `alembic upgrade head` aplica a revisao sem erro em base existente.
+  - `alembic downgrade -1` reverte sem erro.
+  - Indices presentes via `PRAGMA index_list('contatos')` em SQLite.
+  - Regressivo backend continua verde.
+- **Dependencias**: nenhuma.
+- **Paralelizavel com**: TASK-02.
+
+### TASK-02 — Hook `useDebounce` consolidado
+- **Objetivo**: Substituir o uso ad-hoc de debounce em `contatos/page.tsx` por
+  um hook reusavel, requisito do filtro `empresa` (RF-05) e ja antecipado pelo
+  PRD (secao 4).
+- **Arquivos a criar/editar**:
+  - Criar: `frontend/src/hooks/useDebounce.ts`
+  - Criar: `frontend/__tests__/useDebounce.test.ts`
+- **Descricao**: Implementar `useDebounce<T>(value: T, delay = 300): T` em
+  TypeScript estrito. Teste cobre: valor inicial retorna sem espera; alteracoes
+  rapidas retornam apenas o ultimo valor apos `delay` (usar `jest.useFakeTimers`).
+  NAO tocar em `contatos/page.tsx` ainda — a substituicao ocorre em TASK-09.
+- **Criterios de aceite**:
+  - `useDebounce.ts` exporta hook tipado.
+  - Teste passa em `jest` isolado (fake timers).
+  - Lint frontend sem warnings novos.
+- **Dependencias**: nenhuma.
+- **Paralelizavel com**: TASK-01.
 
 ---
 
-## Fases
+## Fase 1 — Backend (D.1, D.3, D.4, D.5)
 
-### Fase 1 — Fundações (PARALELIZÁVEL)
+> Quatro tasks de backend isoladas em arquivos distintos ao maximo. Apos Fase 0,
+> TASK-03, TASK-04 e TASK-05 podem comecar em paralelo. TASK-06 aguarda TASK-03
+> e TASK-05 por reusar a query base de listagem.
 
-> TASK-01 e TASK-02 tocam conjuntos disjuntos de arquivos e não dependem uma da outra. **Devem ser executadas em paralelo** por dois DEVs.
+### TASK-03 — Backend D.1: ordenacao com allowlist
+- **Objetivo**: Implementar `sort_by` / `sort_order` em `GET /contatos/` (RF-01,
+  RNF-03).
+- **Arquivos a criar/editar**:
+  - Editar: `backend/app/routers/contatos.py` (apenas o endpoint de listagem —
+    bloco de query params; SECAO "ordenacao")
+  - Editar: `backend/app/services/contato_service.py` (apenas a funcao
+    `listar_contatos` — adicionar parametros `sort_by` / `sort_order` e
+    aplicar `order_by` via `getattr(Contato, col)` apos validacao em allowlist)
+  - Editar: `backend/app/schemas/contato.py` (apenas adicionar enums
+    `SortByContato` e `SortOrder`; nao mexer em outros schemas)
+  - Criar: `backend/tests/test_contatos_sort.py`
+- **Descricao**: Allowlist = {`nome`, `email`, `empresa`, `telefone`,
+  `criado_em`, `atualizado_em`}. Default = `criado_em desc` (preservar
+  comportamento atual). Qualquer outro valor -> 422 via Pydantic enum. ORM
+  aplica `order_by` por `getattr` — proibida concatenacao de string em SQL.
+  Log estruturado herda `request_id` (B.1) e inclui `sort_by`/`sort_order`.
+- **Criterios de aceite**:
+  - `GET /contatos/?sort_by=nome&sort_order=desc` retorna lista ordenada DESC.
+  - `sort_by=invalido` retorna 422 com mensagem clara.
+  - Sem `sort_by` mantem comportamento atual (regressivo verde).
+  - Teste novo cobre asc, desc, default, invalido (>= 4 cases).
+- **Dependencias**: TASK-01 (indices recomendados para perf, funcional sem).
+- **Paralelizavel com**: TASK-04, TASK-05. Ver "Nota de paralelismo" abaixo.
 
----
+### TASK-04 — Backend D.3: regex telefone no Pydantic
+- **Objetivo**: Validar telefone no schema do backend conforme contrato
+  `(99) 99999-9999` (RF-04).
+- **Arquivos a criar/editar**:
+  - Editar: `backend/app/schemas/contato.py` (apenas o campo `telefone` nos
+    schemas `ContatoCreate` / `ContatoUpdate` — adicionar `Field(pattern=...)`
+    ou `field_validator` com regex)
+  - Criar: `backend/tests/test_contatos_telefone.py`
+- **Descricao**: Regex aceita `^\(\d{2}\) \d{5}-\d{4}$` (formatado), que e o
+  contrato unico desta entrega (alinhado a TASK-08 no frontend). Manter
+  telefone opcional (None ou string vazia continuam aceitos). Erro 422 com
+  mensagem clara em PT-BR. Nao remover/alterar codigo de auditoria existente.
+- **Criterios de aceite**:
+  - POST com telefone valido `(11) 91234-5678` -> 201.
+  - POST com telefone invalido (ex: `123`) -> 422.
+  - POST sem telefone -> 201 (continua opcional).
+  - PATCH com telefone invalido -> 422.
+  - Regressivo verde.
+- **Dependencias**: nenhuma (so toca `schemas/contato.py` em campo distinto
+  das demais tasks).
+- **Paralelizavel com**: TASK-03, TASK-05, TASK-06.
 
-#### TASK-01 — Infraestrutura de logging estruturado + middleware de request_id
-- **ID:** TASK-01
-- **Objetivo:** Construir todo o aparato de logging JSON com redaction e o middleware FastAPI que injeta `request_id` em `contextvars` e mede `duration_ms`. Não toca em nada relacionado a exceções de domínio.
-- **Dependências:** nenhuma
-- **Pode rodar em paralelo com:** TASK-02
-- **Requisitos atendidos:** RF-02, RF-03, RF-08, RNF-02, RNF-05; pré-requisito de CA-01, CA-02, CA-03, CA-04, CA-10.
+### TASK-05 — Backend D.4: filtros avancados
+- **Objetivo**: Adicionar parametros `empresa`, `criado_de`, `criado_ate`,
+  `sem_email`, `sem_telefone` em `GET /contatos/` (RF-06).
+- **Arquivos a criar/editar**:
+  - Editar: `backend/app/routers/contatos.py` (apenas o endpoint de
+    listagem — adicionar os novos query params; SECAO "filtros")
+  - Editar: `backend/app/services/contato_service.py` (adicionar logica de
+    filtro em `listar_contatos` — secao distinta da ordenacao)
+  - Editar: `backend/app/schemas/contato.py` (adicionar validator que
+    rejeita `criado_de > criado_ate` com 422; RNF-05)
+  - Criar: `backend/tests/test_contatos_filtros.py`
+- **Descricao**: Filtros aplicados via `where`/`filter` no SQLAlchemy.
+  `sem_email` / `sem_telefone` traduzem para `IS NULL OR == ''`. `empresa` e
+  busca por `ilike`. Combinaveis com `search`, `sort_by`, `sort_order` e
+  paginacao. Log inclui filtros aplicados (sem PII alem do `user_id`).
+- **Criterios de aceite**:
+  - Filtros isolados retornam subset correto.
+  - Combinacao de >= 2 filtros funciona.
+  - `criado_de > criado_ate` -> 422.
+  - Combinacao com `search` + `sort_by` retorna corretamente.
+  - Cobertura novo arquivo >= 95% no modulo de contatos.
+- **Dependencias**: TASK-01 (indice em `empresa`/`criado_em` para perf).
+- **Paralelizavel com**: TASK-03, TASK-04. Ver "Nota de paralelismo" abaixo.
 
-- **Arquivos afetados:**
-  - `backend/requirements.txt` (editar — adicionar `python-json-logger` com versão pinada, ex.: `python-json-logger==2.0.7`)
-  - `backend/app/config.py` (editar — adicionar campo `env: str = "development"` em `Settings`, lido da variável de ambiente `ENV`)
-  - `backend/app/logging_config.py` (criar)
-  - `backend/app/middleware/__init__.py` (criar se não existir)
-  - `backend/app/middleware/request_context.py` (criar)
+> **Nota de paralelismo entre TASK-03 e TASK-05**: ambas editam
+> `routers/contatos.py`, `services/contato_service.py` e `schemas/contato.py`.
+> Para evitar conflito, cada agente toca em BLOCOS distintos do mesmo arquivo
+> (T03 = bloco "ordenacao"; T05 = bloco "filtros"); o orquestrador valida que
+> os diffs nao se sobrepoem antes do merge. Caso o orquestrador siga politica
+> "1 arquivo = 1 agente por vez", serializar: rodar TASK-03 e TASK-04 em
+> paralelo na onda 2; TASK-05 entra na onda 2b apos merge de TASK-03.
 
-- **Detalhamento técnico:**
-  1. Em `backend/requirements.txt`, adicionar `python-json-logger==2.0.7` (linha nova, ordem alfabética próxima às demais).
-  2. Em `backend/app/config.py`, adicionar `env: str = "development"` ao `Settings`. Garantir que o arquivo `.env` é a fonte (já configurado por `SettingsConfigDict`). Não quebrar nenhum campo existente.
-  3. Criar `backend/app/logging_config.py` contendo:
-     - Dois `ContextVar` no nível de módulo: `request_id_ctx: ContextVar[str | None]` e `user_id_ctx: ContextVar[str | None]`, ambos com default `None`.
-     - Funções `get_request_id()` e `get_user_id()` para leitura segura.
-     - Classe `ContextFilter(logging.Filter)` que injeta `request_id` e `user_id` em cada `LogRecord`, lendo dos ContextVars.
-     - Classe `RedactionFilter(logging.Filter)` que aplica mascaramento (`"***"`) a valores das chaves: `password`, `senha`, `token`, `access_token`, `refresh_token`, `authorization`, `secret`. Deve mascarar tanto `record.msg` quando dict, quanto `record.args` quando dict/tupla, quanto strings que claramente contenham `key=value`. Implementação conservadora: recursão sobre dicts e listas, com comparação case-insensitive das chaves.
-     - Função `setup_logging(env: str) -> None` que:
-       - se `env == "production"`: configura handler stdout com `pythonjsonlogger.jsonlogger.JsonFormatter` no formato `"%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s %(user_id)s %(route)s %(duration_ms)s"`;
-       - se `env == "development"` (ou qualquer outro): configura handler stdout com `logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")`;
-       - aplica `ContextFilter` e `RedactionFilter` no handler;
-       - define nível raiz `INFO`;
-       - é idempotente (limpa handlers prévios antes de adicionar).
-  4. Criar `backend/app/middleware/__init__.py` vazio (apenas garantir o pacote).
-  5. Criar `backend/app/middleware/request_context.py` contendo a classe `RequestContextMiddleware(BaseHTTPMiddleware)` que:
-     - lê `X-Request-ID` do header da requisição; se ausente, gera `uuid.uuid4().hex` (ou `str(uuid.uuid4())`);
-     - executa `request_id_ctx.set(rid)` ANTES de `await call_next(request)`;
-     - se `request.state` tiver `user_id`, executa `user_id_ctx.set(...)`;
-     - cronometra `start = time.perf_counter()` antes da chamada e calcula `duration_ms = int((time.perf_counter() - start) * 1000)` depois;
-     - emite UM log estruturado `INFO` ao final com extras: `request_id`, `route` (preferir `request.scope.get("route").path` ou `request.url.path` como fallback), `method`, `status_code`, `duration_ms`, `user_id`;
-     - adiciona `response.headers["X-Request-ID"] = rid` antes de retornar a `response`;
-     - se `call_next` levantar exceção, ainda assim faz log de saída com `status_code=500` e re-levanta (sem engolir).
-  6. Não importar `main.py` em lugar nenhum destes módulos (evitar ciclos). Não tocar em `backend/app/main.py` nesta task — o wiring é da TASK-04.
-
-- **Critérios de aceite (verificáveis):**
-  - [ ] `pip install -r backend/requirements.txt` instala `python-json-logger==2.0.7` sem conflito.
-  - [ ] `from app.config import settings; settings.env` retorna `"development"` por padrão e respeita `ENV=production` no ambiente.
-  - [ ] `from app.logging_config import setup_logging, request_id_ctx, user_id_ctx, ContextFilter, RedactionFilter` importa sem erro.
-  - [ ] Chamar `setup_logging("production")` faz o logger raiz emitir JSON com a chave `request_id` presente (valor pode ser `null`).
-  - [ ] Chamar `setup_logging("development")` faz o logger emitir formato texto plano.
-  - [ ] `RedactionFilter` aplicado a um `LogRecord` cujo `args` é `{"password": "abc"}` produz `{"password": "***"}` na saída final.
-  - [ ] `RequestContextMiddleware` pode ser instanciado isoladamente em um `FastAPI()` mínimo (smoke check local) sem ImportError.
-  - [ ] Nenhum arquivo fora da lista acima foi modificado.
-
----
-
-#### TASK-02 — Hierarquia de exceções de domínio
-- **ID:** TASK-02
-- **Objetivo:** Criar o módulo `backend/app/exceptions.py` com a hierarquia tipada (`DomainError` e subclasses). Apenas a definição das classes — handlers FastAPI e refactor de chamadas vêm em tasks posteriores.
-- **Dependências:** nenhuma
-- **Pode rodar em paralelo com:** TASK-01
-- **Requisitos atendidos:** RF-04; pré-requisito de RF-05, CA-05, CA-06, CA-07.
-
-- **Arquivos afetados:**
-  - `backend/app/exceptions.py` (criar)
-
-- **Detalhamento técnico:**
-  1. Criar `backend/app/exceptions.py` com a seguinte hierarquia (em Python puro, sem imports do FastAPI):
-     ```
-     class DomainError(Exception):
-         http_status: int = 400
-         def __init__(self, message: str, details: dict | None = None) -> None:
-             super().__init__(message)
-             self.message = message
-             self.details = details or {}
-
-     class NotFoundError(DomainError):        http_status = 404
-     class ConflictError(DomainError):        http_status = 409
-     class ValidationError(DomainError):      http_status = 422
-     class AuthenticationError(DomainError):  http_status = 401
-     class AuthorizationError(DomainError):   http_status = 403
-     ```
-  2. Garantir que cada subclasse herde apenas de `DomainError` e que `http_status` seja atributo de classe sobrescrito.
-  3. Adicionar docstrings curtas explicando quando cada classe deve ser lançada (exemplos: `NotFoundError("contato")`, `ConflictError("email já existe")`).
-  4. Exportar via `__all__ = ["DomainError", "NotFoundError", "ConflictError", "ValidationError", "AuthenticationError", "AuthorizationError"]`.
-  5. NÃO importar FastAPI, NÃO usar `HTTPException` aqui. O módulo deve permanecer agnóstico de framework.
-  6. NÃO editar `main.py` nem qualquer router/service nesta task.
-
-- **Critérios de aceite:**
-  - [ ] `from app.exceptions import DomainError, NotFoundError, ConflictError, ValidationError, AuthenticationError, AuthorizationError` funciona.
-  - [ ] `NotFoundError("contato").http_status == 404`.
-  - [ ] `ConflictError("dup", {"campo": "email"}).details == {"campo": "email"}`.
-  - [ ] `isinstance(NotFoundError("x"), DomainError) is True`.
-  - [ ] `python -c "import app.exceptions"` não importa FastAPI (módulo agnóstico).
-  - [ ] Nenhum outro arquivo do repositório foi modificado.
-
----
-
-### Fase 2 — Integração
-
-> Depende de TASK-01 e TASK-02. TASK-03 cria os handlers; TASK-04 faz o wiring no `main.py` e remove o `except Exception: pass`. **TASK-03 e TASK-04 NÃO são paralelizáveis** entre si — TASK-04 importa o módulo criado em TASK-03.
-
----
-
-#### TASK-03 — Exception handlers globais (uso conjunto de logger + exceções)
-- **ID:** TASK-03
-- **Objetivo:** Implementar os handlers globais do FastAPI que convertem cada classe da hierarquia em uma resposta HTTP semanticamente correta, registrando o evento no logger estruturado com `request_id` do contexto.
-- **Dependências:** TASK-01, TASK-02
-- **Pode rodar em paralelo com:** nenhuma
-- **Requisitos atendidos:** RF-05; pré-requisito de CA-05, CA-06, CA-07, CA-08.
-
-- **Arquivos afetados:**
-  - `backend/app/exception_handlers.py` (criar)
-
-- **Detalhamento técnico:**
-  1. Criar `backend/app/exception_handlers.py` exportando uma função `register_exception_handlers(app: FastAPI) -> None`.
-  2. A função registra handlers para:
-     - `NotFoundError` -> 404
-     - `ConflictError` -> 409
-     - `ValidationError` (a de domínio, não a do Pydantic) -> 422
-     - `AuthenticationError` -> 401
-     - `AuthorizationError` -> 403
-     - `DomainError` (fallback) -> 400
-     - `Exception` (fallback geral) -> 500 com payload genérico `{"detail": "Erro interno do servidor."}`
-  3. Cada handler de exceção de domínio:
-     - lê `get_request_id()` do `logging_config`;
-     - faz `logger.warning(...)` para 4xx e `logger.error(..., exc_info=True)` para `DomainError` genérico e para `Exception`;
-     - retorna `JSONResponse(status_code=exc.http_status, content={"detail": exc.message, **({"details": exc.details} if exc.details else {})})` para subclasses; para `DomainError` genérico, status 400; para `Exception`, payload fixo sem stack trace ao cliente.
-  4. Nunca incluir `traceback` no payload retornado ao cliente. O stack trace só vai para o log via `exc_info=True`.
-  5. Definir `logger = logging.getLogger(__name__)` no topo do arquivo.
-  6. NÃO chamar `app.add_exception_handler` neste módulo direto — apenas dentro da função `register_exception_handlers`.
-  7. Não tocar em `main.py` (wiring é TASK-04).
-
-- **Critérios de aceite:**
-  - [ ] `from app.exception_handlers import register_exception_handlers` funciona.
-  - [ ] Em um `FastAPI()` de teste, após `register_exception_handlers(app)`, uma rota que faça `raise NotFoundError("x")` responde HTTP 404 com `{"detail": "x"}`.
-  - [ ] Idem para `ConflictError` -> 409, `AuthenticationError` -> 401, `AuthorizationError` -> 403, `ValidationError` (de domínio) -> 422.
-  - [ ] Uma rota que faça `raise RuntimeError("boom")` responde 500 com `{"detail": "Erro interno do servidor."}` e nenhum traceback no body.
-  - [ ] O log emitido em caso de `Exception` contém o stack trace (chamada com `exc_info=True`).
+### TASK-06 — Backend D.5: endpoint de exportacao CSV / XLSX
+- **Objetivo**: Expor `GET /contatos/export?format=csv|xlsx` com
+  `StreamingResponse` (RF-07 a RF-10, RNF-02).
+- **Arquivos a criar/editar**:
+  - Criar: `backend/app/exporters/__init__.py`
+  - Criar: `backend/app/exporters/csv_exporter.py` (gera linhas CSV via
+    generator + stdlib `csv`)
+  - Criar: `backend/app/exporters/xlsx_exporter.py` (gera workbook com
+    `openpyxl` em `BytesIO`; se exceder limite de memoria, fallback
+    documentado conforme R4 do PRD)
+  - Editar: `backend/app/routers/contatos.py` (adicionar endpoint
+    `/contatos/export` — apenas append; nao mexer no endpoint de listagem)
+  - Editar: `backend/app/services/contato_service.py` (extrair query base
+    reutilizavel `_montar_query_listagem` para ser usada por listagem E
+    exportacao — depende dos blocos de sort/filtros estaveis)
+  - Editar: `backend/requirements.txt` (adicionar `openpyxl` se ausente,
+    com versao pinada)
+  - Criar: `backend/tests/test_contatos_export.py`
+- **Descricao**: Endpoint aceita mesmos params de listagem (search, sort_by,
+  sort_order, filtros D.4) mas IGNORA paginacao (RF-08). Soft-deleted nao
+  entra (RF-09). Colunas fixas: `id`, `nome`, `email`, `telefone`, `empresa`,
+  `criado_em`, `atualizado_em` com headers em PT-BR. `Content-Type` apropriado
+  e `Content-Disposition: attachment; filename="contatos_YYYYMMDD_HHMMSS.<ext>"`.
+  Log com `route`, `user_id`, `format`, `rows_exported`, `duration_ms`
+  (RF-10).
+- **Criterios de aceite**:
+  - GET com `format=csv` devolve `text/csv; charset=utf-8` + header
+    `Content-Disposition` com timestamp.
+  - GET com `format=xlsx` devolve mimetype
+    `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` +
+    arquivo abrivel em Excel/LibreOffice/Sheets (RNF-08 validado via
+    fixture de teste + verificacao manual).
+  - Soft-deleted excluido.
+  - Resposta usa `StreamingResponse` (validado em teste).
+  - `format` invalido -> 422.
+  - Log estruturado emitido com campos exigidos.
+  - Aplica filtros + sort + search atuais (validar em teste de combinacao).
+- **Dependencias**: TASK-01 (perf), TASK-03 (reusa sort), TASK-05 (reusa
+  filtros).
+- **Paralelizavel com**: TASK-04 (apenas TASK-04). A estrutura dos exporters
+  (`exporters/*.py`) PODE ser iniciada em paralelo a TASK-03 e TASK-05, mas
+  o merge final do router e do `contato_service.py` deve ocorrer apos
+  estabilizacao dessas tasks.
 
 ---
 
-#### TASK-04 — Wiring no `main.py`, ativação do middleware e remoção do `except Exception: pass`
-- **ID:** TASK-04
-- **Objetivo:** Plugar `setup_logging`, `RequestContextMiddleware` e `register_exception_handlers` no `app` em `backend/app/main.py`. Substituir o `except Exception: pass` (linha ~36) por tratamento explícito que loga em `WARNING` e não engole silenciosamente.
-- **Dependências:** TASK-01, TASK-02, TASK-03
-- **Pode rodar em paralelo com:** nenhuma
-- **Requisitos atendidos:** RF-02, RF-03, RF-05, RF-06; pré-requisito de CA-01, CA-02, CA-03, CA-04, CA-09.
+## Fase 2 — Frontend (D.1, D.3, D.4, D.5)
 
-- **Arquivos afetados:**
-  - `backend/app/main.py` (editar)
+> Cada feature em componente proprio. Tasks paralelizaveis entre si depois que
+> o backend correspondente estiver pronto.
 
-- **Detalhamento técnico:**
-  1. No topo de `backend/app/main.py`, antes de instanciar `FastAPI(...)`:
-     - `from app.config import settings`
-     - `from app.logging_config import setup_logging`
-     - chamar `setup_logging(settings.env)`
-     - `logger = logging.getLogger(__name__)`
-  2. Após a criação do `app`, antes do `add_middleware(CORSMiddleware, ...)`, adicionar:
-     - `from app.middleware.request_context import RequestContextMiddleware`
-     - `app.add_middleware(RequestContextMiddleware)`
-     - Ordem importa: `RequestContextMiddleware` deve ser o **mais externo** (adicionado por último em ordem de `add_middleware`, pois FastAPI executa LIFO) para envolver TODO o ciclo. Documentar com comentário inline.
-  3. Importar e chamar `register_exception_handlers(app)` após os routers serem incluídos.
-  4. Tratar o `except Exception: retry_after = 60` (linha ~36 dentro de `rate_limit_handler`): substituir por `except (AttributeError, TypeError) as exc:` + `logger.warning("não foi possível calcular retry_after: %s", exc)`. Manter `retry_after = 60` como fallback. O comportamento HTTP visível permanece idêntico.
-     - **Atenção:** o PRD referencia o `except Exception: pass` em `main.py:36`. No código atual existe `except Exception: retry_after = 60` nessa região — não é `pass`, mas ainda assim engole o tipo da exceção. Tratar conforme RF-06: estreitar para exceções esperadas e logar. Se durante a execução for descoberto um `except Exception: pass` literal noutro ponto de `main.py`, eliminar do mesmo modo.
-  5. Garantir que NENHUM `print(...)` exista em `main.py` após a edição (substituir por `logger.info/warning/error`).
-  6. NÃO mudar contratos: rotas, status codes e payloads continuam idênticos.
+### TASK-07 — Frontend D.1: tabela ordenavel + querystring
+- **Objetivo**: Renderizar headers ordenaveis (`nome`, `email`, `empresa`,
+  `criado_em`) com tri-state none/asc/desc, refletir na URL (RF-02, RNF-06).
+- **Arquivos a criar/editar**:
+  - Editar: `frontend/src/components/ContatoTable.tsx` (so headers + icones
+    de seta + `aria-sort` — RNF-07; props expandidas com callback `onSort`)
+  - Editar: `frontend/src/app/contatos/page.tsx` (estado de sort,
+    sincronizacao com `searchParams`, passar para `api.ts`)
+  - Editar: `frontend/src/services/api.ts` (adicionar `sort_by` /
+    `sort_order` na funcao de listagem)
+  - Criar: `frontend/__tests__/contatos.sort.test.tsx`
+- **Descricao**: Tri-state: none -> asc -> desc -> none. URL recebe `sort_by`
+  e `sort_order`. Refresh mantem o estado. Icones acessiveis (seta para
+  cima/baixo + `aria-sort="ascending|descending|none"`).
+- **Criterios de aceite**:
+  - Clicar no header alterna estados; URL atualiza.
+  - Refresh com `?sort_by=nome&sort_order=desc` aplica ordenacao.
+  - `aria-sort` reflete estado correto.
+  - Teste cobre caminho feliz e tri-state.
+- **Dependencias**: TASK-03.
+- **Paralelizavel com**: TASK-08, TASK-09, TASK-10. Atencao a merge em
+  `page.tsx` e `api.ts` (compartilhados com TASK-09 e TASK-10).
 
-- **Critérios de aceite:**
-  - [ ] `grep -nR "except Exception: pass" backend/` retorna vazio (CA-09).
-  - [ ] `grep -nR "except Exception:" backend/app/main.py` retorna vazio OU mostra apenas exceções estreitadas e logadas — NUNCA engolidas.
-  - [ ] Subir o app em DEV (`ENV=development`) e bater em `/` produz log em formato texto com `request_id`, `route=/`, `status_code=200`.
-  - [ ] Subir o app com `ENV=production` e bater em `/` produz EXATAMENTE 1 linha JSON em stdout contendo `request_id`, `user_id`, `route`, `duration_ms`, `status_code`.
-  - [ ] Requisição com header `X-Request-ID: abc-123` produz log com `request_id="abc-123"` e header de resposta `X-Request-ID: abc-123`.
-  - [ ] Requisição sem `X-Request-ID` recebe header de resposta com UUID v4 válido.
-  - [ ] Suíte de testes existente passa sem alterações.
+### TASK-08 — Frontend D.3: mascara telefone + Zod
+- **Objetivo**: Aplicar `react-input-mask` no campo telefone do `ContatoForm`
+  e alinhar Zod (RF-03, RF-04).
+- **Arquivos a criar/editar**:
+  - Editar: `frontend/src/components/ContatoForm.tsx` (apenas campo
+    telefone — wrapping com `react-input-mask` via RHF `Controller`)
+  - Editar: `frontend/src/lib/schemas.ts` (apenas o campo `telefone` do
+    schema — regex compativel com contrato definido em TASK-04)
+  - Criar: `frontend/__tests__/contatoForm.telefone.test.tsx`
+- **Descricao**: Manter telefone opcional. Mascara `(99) 99999-9999`.
+  Mensagem de erro em PT-BR clara ("Telefone deve estar no formato
+  (XX) XXXXX-XXXX"). Aceitar colagem (R7 do PRD) — comportamento padrao do
+  `react-input-mask` cobre isso.
+- **Criterios de aceite**:
+  - Digitar telefone aplica mascara no campo.
+  - Submit com telefone valido -> sem erro.
+  - Submit com telefone invalido -> erro Zod exibido.
+  - Submit sem telefone -> aceito.
+  - Teste cobre 3 casos (vazio, valido, invalido).
+- **Dependencias**: TASK-04 (alinhamento de contrato regex).
+- **Paralelizavel com**: TASK-07, TASK-09, TASK-10 (arquivos disjuntos).
 
----
+### TASK-09 — Frontend D.4: painel de filtros colapsavel + useDebounce
+- **Objetivo**: Implementar painel "Filtros" com campos do RF-05 e refletir
+  em URL (RNF-06).
+- **Arquivos a criar/editar**:
+  - Criar: `frontend/src/components/ContatoFiltersPanel.tsx` (componente
+    proprio — colapsavel, controla estado dos 5 filtros, chama callback
+    `onChange`)
+  - Editar: `frontend/src/app/contatos/page.tsx` (montar o painel acima
+    da tabela, ler/escrever `searchParams` para `empresa`/`criado_de`/
+    `criado_ate`/`sem_email`/`sem_telefone`, substituir debounce ad-hoc
+    pelo `useDebounce` da TASK-02)
+  - Editar: `frontend/src/services/api.ts` (adicionar params de filtro
+    na funcao de listagem — coexistir com TASK-07)
+  - Criar: `frontend/__tests__/contatos.filtros.test.tsx`
+- **Descricao**: Estado colapsavel lembrado em `sessionStorage` ("lembrado
+  durante a sessao"). Filtro `empresa` usa `useDebounce(300ms)`. Date
+  pickers exibem `DD/MM/AAAA` (RNF-10). Combinavel com search + sort +
+  paginacao sem perda de estado.
+- **Criterios de aceite**:
+  - Painel abre/fecha; estado persiste em refresh dentro da sessao.
+  - Filtros refletem na URL (deep link funcional).
+  - `empresa` faz debounce de 300 ms (validado com fake timers).
+  - Teste cobre 4 cenarios: empresa, range data, booleano, combinacao.
+- **Dependencias**: TASK-02, TASK-05.
+- **Paralelizavel com**: TASK-07, TASK-08, TASK-10. Para `page.tsx` e
+  `api.ts` (compartilhados), cada task toca em SECAO distinta (T07 =
+  estado de sort; T09 = estado de filtros; T10 = botao export); merge
+  controlado pelo orquestrador.
 
-### Fase 3 — Refactor seletivo e cobertura de testes
-
-> TASK-05 toca código de routers/services. TASK-06 e TASK-07 criam arquivos de teste novos disjuntos. TASK-06 e TASK-07 podem rodar em paralelo entre si; ambas dependem da Fase 2.
-
----
-
-#### TASK-05 — Refactor seletivo de `HTTPException` para exceções de domínio + logger nomeado nos módulos
-- **ID:** TASK-05
-- **Objetivo:** (a) Adicionar `logger = logging.getLogger(__name__)` em todos os módulos de `routers/` e `services/` e emitir logs nos pontos relevantes; (b) Substituir `HTTPException(status_code=404, ...)` por `NotFoundError(...)` e `HTTPException(status_code=409, ...)` por `ConflictError(...)` SOMENTE onde a semântica de domínio é clara (ex.: contato/usuário inexistente, email duplicado). Onde o status code resulta de uma regra técnica não-domínio (ex.: validação de query string `sort_by`), manter `HTTPException`.
-- **Dependências:** TASK-04
-- **Pode rodar em paralelo com:** nenhuma (toca múltiplos arquivos de routers/services em sequência, e testes da TASK-06 dependem deste refactor)
-- **Requisitos atendidos:** RF-01, RF-07; pré-requisito de CA-12.
-
-- **Arquivos afetados (editar):**
-  - `backend/app/routers/contatos.py`
-  - `backend/app/routers/usuarios.py`
-  - `backend/app/routers/auth.py`
-  - `backend/app/services/contato_service.py`
-  - `backend/app/services/usuario_service.py`
-  - Demais módulos em `backend/app/services/` que já existam (ex.: `_helpers.py` se aplicável) — adicionar logger nomeado, sem mudar comportamento.
-
-- **Detalhamento técnico:**
-  1. Em cada arquivo da lista, adicionar no topo:
-     ```
-     import logging
-     logger = logging.getLogger(__name__)
-     ```
-  2. Identificar todo `raise HTTPException(status_code=404, detail="...")` cuja mensagem indique "não encontrado" e substituir por `raise NotFoundError(detail_message)`. Importar `from app.exceptions import NotFoundError, ConflictError` no topo.
-  3. Identificar `raise HTTPException(status_code=409, ...)` em contexto de unicidade (ex.: email já cadastrado) e substituir por `ConflictError(...)`.
-  4. **NÃO** substituir os `HTTPException(status_code=422, ...)` que validam `sort_by`/`sort_order` em `routers/contatos.py` (não é conceito de domínio). Manter.
-  5. **NÃO** alterar o `rate_limit_handler` nem o handler de `RateLimitExceeded` (slowapi continua intacto).
-  6. Adicionar pelo menos um `logger.info` em operações de criação/atualização/deleção em services (ex.: "contato criado id=%s") e `logger.warning` quando o service decide não-prosseguir por regra (ex.: tentativa de deletar inexistente). Nenhum log com payload bruto que contenha senha/token.
-  7. Garantir que o comportamento HTTP visível **não muda**: a suíte regressiva precisa passar.
-  8. Nenhum `print(...)` deve permanecer em qualquer arquivo editado.
-
-- **Critérios de aceite:**
-  - [ ] `grep -nR "^logger = logging.getLogger" backend/app/routers/ backend/app/services/` lista TODOS os arquivos `.py` desses diretórios.
-  - [ ] `grep -nR "print(" backend/app/` retorna vazio (DoD).
-  - [ ] Pelo menos UM `HTTPException(status_code=404, ...)` foi convertido para `NotFoundError(...)` em `routers/usuarios.py` (helper `_get_or_404`) ou em `routers/contatos.py`.
-  - [ ] Pelo menos UM `HTTPException(status_code=409, ...)` foi convertido para `ConflictError(...)` (cadastro de email duplicado).
-  - [ ] Suíte de testes regressivos (Fases 1, 3.1, 3.2) continua 100% verde sem qualquer alteração nos arquivos de teste existentes (CA-11).
-  - [ ] Status code observável e payload de erro permanecem idênticos ao anterior (CA-12).
-
----
-
-#### TASK-06 — Testes do middleware de request_id e dos exception handlers
-- **ID:** TASK-06
-- **Objetivo:** Cobrir com testes pytest o middleware `RequestContextMiddleware` (geração/propagação do `X-Request-ID`) e cada classe de exception handler.
-- **Dependências:** TASK-05
-- **Pode rodar em paralelo com:** TASK-07
-- **Requisitos atendidos:** RNF-06; verificação direta de CA-03, CA-04, CA-05, CA-06, CA-07, CA-08.
-
-- **Arquivos afetados (criar):**
-  - `backend/tests/test_logging_middleware.py`
-  - `backend/tests/test_exception_handlers.py`
-
-- **Detalhamento técnico:**
-  1. `test_logging_middleware.py`:
-     - Usar `httpx.AsyncClient` ou `TestClient` contra o `app` real (ou um `FastAPI()` minimal montado com `RequestContextMiddleware` + uma rota dummy `/ping`).
-     - Teste 1: GET sem header -> resposta tem `X-Request-ID` válido como UUID.
-     - Teste 2: GET com `X-Request-ID: abc-123` -> resposta devolve o mesmo valor.
-     - Teste 3 (async): a rota lê `request_id_ctx.get()` e retorna no body; o valor bate com o header de resposta.
-     - Teste 4: o log emitido (capturado com `caplog`) contém `request_id`, `route`, `status_code`, `duration_ms`.
-  2. `test_exception_handlers.py`:
-     - Montar uma `FastAPI()` de teste, registrar `register_exception_handlers`, expor rotas dummy que façam `raise NotFoundError("x")`, `raise ConflictError("y")`, `raise ValidationError("z")`, `raise AuthenticationError("a")`, `raise AuthorizationError("b")`, `raise DomainError("c")`, `raise RuntimeError("boom")`.
-     - Verificar status codes 404/409/422/401/403/400/500 respectivamente.
-     - Verificar payload `{"detail": "..."}` consistente.
-     - Para o caso `RuntimeError`, verificar que o body **não** contém o texto `"boom"` nem `"Traceback"`.
-  3. NÃO modificar testes existentes. NÃO usar PANs ou dados sensíveis reais. Usar fixtures isoladas; se precisar de DB, usar SQLite in-memory de fixture já estabelecida pelo projeto.
-  4. Marcar testes async com `@pytest.mark.asyncio` conforme já é prática do projeto.
-
-- **Critérios de aceite:**
-  - [ ] `pytest backend/tests/test_logging_middleware.py` passa 100%.
-  - [ ] `pytest backend/tests/test_exception_handlers.py` passa 100%.
-  - [ ] Cobre no mínimo 1 caso por classe da hierarquia de exceções + 1 caso para `Exception` não tratada.
-  - [ ] Verifica explicitamente que header `X-Request-ID` é retornado.
-  - [ ] Suíte total continua passando.
+### TASK-10 — Frontend D.5: botao Exportar com menu CSV/XLSX
+- **Objetivo**: Botao "Exportar" com dropdown (RF-07), chamando endpoint
+  da TASK-06.
+- **Arquivos a criar/editar**:
+  - Criar: `frontend/src/components/ContatoExportButton.tsx` (botao +
+    dropdown + dispara download chamando endpoint com search/filtros/
+    sort atuais)
+  - Editar: `frontend/src/app/contatos/page.tsx` (montar o botao perto
+    do filtro/topo da tabela, passando o estado consolidado de query)
+  - Editar: `frontend/src/services/api.ts` (helper
+    `exportarContatos(format, params)` que constroi URL e dispara
+    download via fetch + Blob + `URL.createObjectURL`)
+  - Criar: `frontend/__tests__/contatos.export.test.tsx`
+- **Descricao**: Botao mostra dois itens: "Exportar CSV", "Exportar Excel".
+  `aria-label` no botao e nos itens (RNF-07). Mantem busca + filtros +
+  sort atuais. Indicador visual de loading durante o request.
+- **Criterios de aceite**:
+  - Botao visivel na pagina `/contatos`.
+  - Clique em CSV chama `GET /contatos/export?format=csv` com params
+    atuais.
+  - Clique em XLSX idem para `format=xlsx`.
+  - Download dispara (validado via mock de `URL.createObjectURL`).
+  - `aria-label` presente em botao e itens.
+  - Teste cobre os dois formatos.
+- **Dependencias**: TASK-06.
+- **Paralelizavel com**: TASK-07, TASK-08, TASK-09 (arquivos majoritariamente
+  disjuntos; merge em `page.tsx`/`api.ts` por secoes).
 
 ---
 
-#### TASK-07 — Teste de redaction de dados sensíveis em logs
-- **ID:** TASK-07
-- **Objetivo:** Garantir via teste automatizado que o `RedactionFilter` mascara `password`/`senha`/`token`/etc. antes da serialização (atende CA-10).
-- **Dependências:** TASK-05
-- **Pode rodar em paralelo com:** TASK-06
-- **Requisitos atendidos:** RF-08, RNF-04; verificação direta de CA-10.
+## Fase 3 — Polimento
 
-- **Arquivos afetados (criar):**
-  - `backend/tests/test_log_redaction.py`
-
-- **Detalhamento técnico:**
-  1. Importar `ContextFilter`, `RedactionFilter`, `setup_logging` de `app.logging_config`.
-  2. Teste unitário 1: instanciar `RedactionFilter`, construir um `LogRecord` cujo `args` é `{"password": "minha-senha", "user": "joao"}` e cujo `msg` é `"login=%s"`. Após `filter.filter(record)`, o `record.args["password"]` deve ser `"***"` e `record.args["user"]` permanece `"joao"`.
-  3. Teste unitário 2: validar mascaramento em estrutura aninhada (`{"data": {"token": "abc"}}` -> `{"data": {"token": "***"}}`).
-  4. Teste de integração: usando `caplog`, fazer uma requisição POST a um endpoint de autenticação com body `{"email": "x@y.com", "password": "segredo123"}`. Validar que NENHUMA linha de log capturada contém a string literal `"segredo123"`.
-  5. Não logar valores reais de senha em fixtures. Usar strings curtas claramente sintéticas (`"segredo123"`, nunca senha real de um humano).
-  6. NÃO incluir PAN, CVV ou dado de cartão — escopo deste projeto não é CDE.
-
-- **Critérios de aceite:**
-  - [ ] `pytest backend/tests/test_log_redaction.py` passa 100%.
-  - [ ] Cobre pelo menos as chaves `password`, `senha`, `token`, `authorization`.
-  - [ ] Cobre caso de estrutura aninhada.
-  - [ ] Em nenhum log capturado durante o teste aparece a string clara da senha.
-
----
-
-### Fase 4 — Refinamento / DoD
-
----
-
-#### TASK-08 — Documentação operacional e validação final de DoD
-- **ID:** TASK-08
-- **Objetivo:** Criar `docs/OPERACAO_LOGS.md` instruindo como ler logs em DEV e em PROD; executar varredura final de `print()`, `except Exception: pass` e medir impacto de latência (RNF-01) com a suíte existente.
-- **Dependências:** TASK-04, TASK-05, TASK-06, TASK-07
-- **Pode rodar em paralelo com:** nenhuma
-- **Requisitos atendidos:** RNF-01, RNF-05; DoD final.
-
-- **Arquivos afetados:**
-  - `docs/OPERACAO_LOGS.md` (criar)
-
-- **Detalhamento técnico:**
-  1. `docs/OPERACAO_LOGS.md` deve conter:
-     - Como rodar o backend em DEV e ver logs em texto plano.
-     - Como rodar em PROD (`ENV=production`) e ver JSON em stdout.
-     - Tabela de campos do log JSON: `timestamp`, `level`, `logger`, `message`, `request_id`, `user_id`, `route`, `duration_ms`, `status_code`.
-     - Exemplo de log de sucesso (200) e de erro (500) anonimizados.
-     - Instrução sobre `X-Request-ID`: como o cliente pode enviar para correlacionar e como o servidor sempre devolve no header.
-     - Lista de chaves redactadas (`password`, `senha`, `token`, `access_token`, `refresh_token`, `authorization`, `secret`).
-     - Nota: Sentry / agregadores externos NÃO fazem parte desta fase.
-  2. Executar localmente: `grep -nR "print(" backend/app/` deve retornar vazio.
-  3. Executar localmente: `grep -nR "except Exception: pass" backend/` deve retornar vazio.
-  4. Rodar a suíte completa de testes do backend e validar que está 100% verde.
-  5. Anotar em commit/PR (não em arquivo versionado) a comparação p50/p95 da suíte antes/depois (RNF-01: p50 +5ms e p95 +15ms no máximo). Se exceder, abrir investigação antes de mergear.
-
-- **Critérios de aceite:**
-  - [ ] `docs/OPERACAO_LOGS.md` existe e cobre os tópicos acima.
-  - [ ] `grep -nR "print(" backend/app/` vazio.
-  - [ ] `grep -nR "except Exception: pass" backend/` vazio.
-  - [ ] Suíte completa de testes passa.
-  - [ ] Linter `bandit` (já no `requirements.txt`) não introduz novas findings de severidade >= MEDIUM.
-  - [ ] DoD do PRD (seção 9) inteiramente checado.
+### TASK-11 — Polimento, doc OpenAPI e smoke test
+- **Objetivo**: Fechar a entrega com revisao de a11y, documentacao OpenAPI
+  e teste ponta-a-ponta simplificado.
+- **Arquivos a criar/editar**:
+  - Editar: `backend/app/routers/contatos.py` (apenas docstrings/summary/
+    description dos novos endpoints, exemplos OpenAPI dos novos params)
+  - Editar: `backend/app/schemas/contato.py` (apenas `Field(..., examples=)`
+    nos novos enums/parametros se faltar)
+  - Editar: `frontend/src/components/ContatoTable.tsx` (revisao
+    `aria-sort` / foco / navegacao por teclado)
+  - Editar: `frontend/src/components/ContatoExportButton.tsx` (revisao
+    `aria-label`)
+  - Criar: `backend/tests/test_contatos_smoke_fase_d.py` (smoke: lista +
+    ordena + filtra + exporta CSV num unico fluxo)
+- **Descricao**: Verificar todos os criterios RNF-04 (logs), RNF-07 (a11y),
+  RNF-09 (cobertura >= 95% no modulo de contatos). Atualizar exemplos
+  OpenAPI para que a doc gerada `/docs` mostre os novos parametros. Smoke
+  test usa fixtures pequenas (10 contatos) e exercita o fluxo completo
+  (lista -> ordena -> filtra -> exporta CSV).
+- **Criterios de aceite**:
+  - `/docs` (Swagger UI) mostra `sort_by`, `sort_order`, filtros e
+    `/contatos/export` com descricoes claras e exemplos.
+  - Regressivo backend verde (manter 236+ tests passando).
+  - Cobertura modulo contatos >= 95%.
+  - Smoke test passa em < 5 segundos.
+  - `aria-sort` e `aria-label` revisados sem warnings axe basicos.
+- **Dependencias**: TASK-03, TASK-04, TASK-05, TASK-06, TASK-07, TASK-08,
+  TASK-09, TASK-10.
+- **Paralelizavel com**: nenhuma (fase final).
 
 ---
 
-## Matriz de Paralelização
+## Diagrama de Paralelismo (Mermaid)
 
-| Task | Depende de | Paraleliza com | Arquivos exclusivos? |
-|------|------------|----------------|----------------------|
-| TASK-01 | nenhuma | **TASK-02** | Sim — `requirements.txt`, `config.py`, `logging_config.py`, `middleware/*` |
-| TASK-02 | nenhuma | **TASK-01** | Sim — apenas `exceptions.py` |
-| TASK-03 | TASK-01, TASK-02 | nenhuma | Sim — apenas `exception_handlers.py` |
-| TASK-04 | TASK-01, TASK-02, TASK-03 | nenhuma | Edita `main.py` |
-| TASK-05 | TASK-04 | nenhuma | Edita routers + services |
-| TASK-06 | TASK-05 | **TASK-07** | Sim — `tests/test_logging_middleware.py`, `tests/test_exception_handlers.py` |
-| TASK-07 | TASK-05 | **TASK-06** | Sim — `tests/test_log_redaction.py` |
-| TASK-08 | TASK-04..07 | nenhuma | Sim — `docs/OPERACAO_LOGS.md` |
+```mermaid
+graph LR
+    subgraph Fase0[Fase 0 - Fundacao]
+        T01[TASK-01 Migration indices]
+        T02[TASK-02 useDebounce]
+    end
 
-### Pares paralelizáveis (orquestrador deve disparar em 2 DEVs)
-- **Fase 1:** TASK-01 e TASK-02 (arranque do trabalho)
-- **Fase 3:** TASK-06 e TASK-07 (cobertura de testes)
+    subgraph Fase1[Fase 1 - Backend]
+        T03[TASK-03 BE D.1 sort]
+        T04[TASK-04 BE D.3 telefone]
+        T05[TASK-05 BE D.4 filtros]
+        T06[TASK-06 BE D.5 export]
+    end
+
+    subgraph Fase2[Fase 2 - Frontend]
+        T07[TASK-07 FE D.1 tabela sort]
+        T08[TASK-08 FE D.3 mascara]
+        T09[TASK-09 FE D.4 filtros painel]
+        T10[TASK-10 FE D.5 export botao]
+    end
+
+    subgraph Fase3[Fase 3 - Polimento]
+        T11[TASK-11 polimento + smoke]
+    end
+
+    T01 --> T03
+    T01 --> T05
+    T01 --> T06
+    T02 --> T09
+
+    T03 --> T06
+    T05 --> T06
+
+    T03 --> T07
+    T04 --> T08
+    T05 --> T09
+    T06 --> T10
+
+    T07 --> T11
+    T08 --> T11
+    T09 --> T11
+    T10 --> T11
+```
+
+ASCII alternativo (resumo de ondas):
+
+```
+Onda 1 (Fase 0)     : [TASK-01]  ||  [TASK-02]
+Onda 2 (Fase 1)     : [TASK-03]  ||  [TASK-04]  ||  [TASK-05]   (apos T01)
+Onda 3 (Fase 1)     : [TASK-06]                                   (apos T01, T03, T05)
+Onda 4 (Fase 2)     : [TASK-07] (apos T03)  ||  [TASK-08] (apos T04)
+                      [TASK-09] (apos T02, T05)  ||  [TASK-10] (apos T06)
+Onda 5 (Fase 3)     : [TASK-11]                                   (apos todas)
+```
 
 ---
 
-## Resumo executivo
-- **Total de tasks:** 8
-- **Tasks paralelizáveis no arranque (Fase 1):** TASK-01 (B.1 — infra de logging + middleware) e TASK-02 (B.2 — exceções de domínio)
-- **Tasks paralelizáveis adicionais (Fase 3):** TASK-06 e TASK-07
-- **Escopo coberto:** somente B.1 + B.2 do roadmap v2, conforme PRD
-- **Itens explicitamente fora de escopo:** B.3 (Sentry), B.4 (audit log persistente), B.5 (healthchecks), qualquer alteração no `frontend/`
+## Matriz de Paralelizacao
+
+| Task    | Depende de              | Paraleliza com              | Arquivos exclusivos? |
+|---------|-------------------------|-----------------------------|----------------------|
+| TASK-01 | nenhuma                 | TASK-02                     | Sim (migration nova) |
+| TASK-02 | nenhuma                 | TASK-01                     | Sim (hook novo + teste) |
+| TASK-03 | TASK-01                 | TASK-04, TASK-05            | Compartilha router/service com T05 (blocos distintos) |
+| TASK-04 | nenhuma                 | TASK-03, TASK-05, TASK-06   | Sim (campo telefone isolado) |
+| TASK-05 | TASK-01                 | TASK-03, TASK-04            | Compartilha router/service com T03 (blocos distintos) |
+| TASK-06 | TASK-01, TASK-03, TASK-05 | TASK-04                   | Maior parte exclusiva (exporters/) |
+| TASK-07 | TASK-03                 | TASK-08, TASK-09, TASK-10   | Compartilha page/api com T09 e T10 |
+| TASK-08 | TASK-04                 | TASK-07, TASK-09, TASK-10   | Sim (form + schemas) |
+| TASK-09 | TASK-02, TASK-05        | TASK-07, TASK-08, TASK-10   | Compartilha page/api (secoes distintas) |
+| TASK-10 | TASK-06                 | TASK-07, TASK-08, TASK-09   | Compartilha page/api (secoes distintas) |
+| TASK-11 | T03-T10                 | nenhuma                     | Polimento final |
+
+---
+
+## Resumo de Paralelismo por Onda
+
+| Onda | Tasks em paralelo                          | Qtde paralela |
+|------|--------------------------------------------|---------------|
+| 1    | TASK-01, TASK-02                           | 2             |
+| 2    | TASK-03, TASK-04, TASK-05                  | 3             |
+| 3    | TASK-06 (+ TASK-04 se ainda em andamento)  | 1-2           |
+| 4    | TASK-07, TASK-08, TASK-09, TASK-10         | 4             |
+| 5    | TASK-11                                    | 1             |
+
+**Total de tasks**: 11
+**Paralelizaveis ja na Onda 1**: 2 (TASK-01 e TASK-02) — atende ao requisito
+minimo de 2 dev-agents simultaneos no primeiro disparo.
+**Paralelizaveis na Onda 2**: 3 (TASK-03, TASK-04, TASK-05).

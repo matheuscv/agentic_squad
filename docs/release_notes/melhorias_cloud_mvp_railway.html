@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plano de Deploy — Railway MVP</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header {
+      background: #0f172a;
+      color: #fff;
+      border-radius: 12px;
+      padding: 2rem 2.5rem;
+      margin-bottom: 2rem;
+      border-left: 6px solid #8B5CF6;
+    }
+    header h1 { font-size: 1.8rem; margin-bottom: .4rem; }
+    header .subtitle { font-size: 1rem; color: #94a3b8; margin-bottom: .6rem; }
+    header .meta { font-size: .85rem; opacity: .65; }
+    .tag-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .8rem; }
+    .tag {
+      display: inline-block;
+      border-radius: 20px;
+      padding: .25rem .9rem;
+      font-size: .78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag-purple { background: #7c3aed; color: #fff; }
+    .tag-yellow { background: #fbbf24; color: #1a1a2e; }
+    .tag-blue   { background: #3b82f6; color: #fff; }
+    .tag-red    { background: #ef4444; color: #fff; }
+    .tag-green  { background: #22c55e; color: #1a1a2e; }
+
+    /* Alerta de custo */
+    .alert {
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 1.5rem;
+      font-size: .9rem;
+      line-height: 1.6;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .alert-warn  { background: #fffbeb; border: 1px solid #fbbf24; color: #92400e; }
+    .alert-info  { background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; }
+    .alert-icon  { font-size: 1.3rem; flex-shrink: 0; margin-top: .1rem; }
+
+    /* Premissas */
+    .section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .section h2 {
+      font-size: 1.15rem;
+      margin-bottom: 1.2rem;
+      color: #0f172a;
+      border-bottom: 2px solid #f1f5f9;
+      padding-bottom: .6rem;
+    }
+
+    /* Etapas */
+    .etapa {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-left: 5px solid;
+    }
+    .etapa-1 { border-color: #6366f1; }
+    .etapa-2 { border-color: #8b5cf6; }
+    .etapa-3 { border-color: #ec4899; }
+    .etapa-4 { border-color: #f97316; }
+    .etapa-5 { border-color: #22c55e; }
+    .etapa-6 { border-color: #14b8a6; }
+    .etapa-7 { border-color: #64748b; }
+
+    .etapa-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+      flex-wrap: wrap;
+    }
+    .etapa-header h2 { font-size: 1.1rem; color: #0f172a; }
+    .etapa-meta { font-size: .82rem; color: #6b7280; text-align: right; }
+    .etapa-meta strong { display: block; color: #374151; }
+
+    .sub { margin-bottom: 1.2rem; }
+    .sub h3 {
+      font-size: .95rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: .5rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .sub p, .sub li {
+      font-size: .88rem;
+      color: #4b5563;
+      line-height: 1.65;
+    }
+    .sub ul { padding-left: 1.3rem; margin-top: .3rem; }
+    .sub ul li { margin-bottom: .25rem; }
+
+    /* Executor badge */
+    .executor {
+      display: inline-block;
+      border-radius: 6px;
+      padding: .15rem .6rem;
+      font-size: .72rem;
+      font-weight: 700;
+    }
+    .exec-claude   { background: #ede9fe; color: #6d28d9; }
+    .exec-voce     { background: #dcfce7; color: #166534; }
+    .exec-ambos    { background: #dbeafe; color: #1e40af; }
+    .exec-opcional { background: #f1f5f9; color: #64748b; }
+
+    code {
+      background: #f1f5f9;
+      color: #7c3aed;
+      border-radius: 4px;
+      padding: .1em .4em;
+      font-size: .84em;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      font-size: .83rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      overflow-x: auto;
+      margin-top: .6rem;
+      line-height: 1.6;
+    }
+
+    /* Tabelas */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+      margin-top: .6rem;
+    }
+    thead th {
+      background: #f8fafc;
+      text-align: left;
+      padding: .6rem .8rem;
+      border-bottom: 2px solid #e5e7eb;
+      color: #374151;
+      font-size: .82rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    tbody td {
+      padding: .65rem .8rem;
+      border-bottom: 1px solid #f3f4f6;
+      color: #4b5563;
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #f9fafb; }
+
+    .check-ok  { color: #16a34a; font-weight: 700; }
+    .check-no  { color: #dc2626; font-weight: 700; }
+    .check-warn{ color: #d97706; font-weight: 700; }
+
+    /* Arquitetura */
+    .arch-box {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 1.4rem 1.6rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .83rem;
+      line-height: 1.75;
+      margin-top: .6rem;
+      overflow-x: auto;
+    }
+    .arch-highlight { color: #a78bfa; font-weight: 700; }
+    .arch-url       { color: #34d399; }
+    .arch-comment   { color: #64748b; }
+
+    /* Resumo final */
+    .summary-bar {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .summary-bar h2 { color: #fff; font-size: 1.1rem; margin-bottom: 1rem; }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .6rem 0;
+      border-bottom: 1px solid #1e293b;
+      font-size: .88rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row .label { color: #94a3b8; flex: 1; min-width: 200px; }
+    .summary-row .value { color: #f1f5f9; font-weight: 600; }
+    .summary-row .exec-tag { font-size: .75rem; }
+
+    footer {
+      text-align: center;
+      font-size: .8rem;
+      color: #9ca3af;
+      padding-top: 1rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <h1>Plano de Deploy — Railway MVP</h1>
+    <div class="subtitle">Hospedagem completa: Backend FastAPI + Frontend Next.js + PostgreSQL</div>
+    <div class="meta">Gerado em 21 de maio de 2026 &nbsp;|&nbsp; Projeto: Agentic Squad — Contact Management App</div>
+    <div class="tag-row">
+      <span class="tag tag-purple">Railway</span>
+      <span class="tag tag-yellow">$5 USD/mês</span>
+      <span class="tag tag-blue">FastAPI + Next.js 14</span>
+      <span class="tag tag-green">Sem hibernação</span>
+    </div>
+  </header>
+
+  <!-- ALERTA DE CUSTO -->
+  <div class="alert alert-warn">
+    <div class="alert-icon">⚠️</div>
+    <div>
+      <strong>Custo mensal: $5 USD fixo (~R$28–30/mês)</strong><br>
+      Railway não possui tier gratuito permanente. O plano <strong>Hobby</strong> custa $5/mês e inclui $5 de crédito de uso.
+      Para este app, o consumo real de compute fica em ~$2–4/mês — o custo efetivo é sempre o mínimo de $5/mês.
+      <strong>Exige cartão de crédito</strong> para ativar o plano Hobby.
+    </div>
+  </div>
+
+  <!-- PREMISSAS -->
+  <div class="section">
+    <h2>Premissas</h2>
+
+    <div class="sub">
+      <h3>Contas externas a criar antes de iniciar</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Serviço</th>
+            <th>URL</th>
+            <th>Finalidade</th>
+            <th>Observação</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>P1</td>
+            <td><strong>Railway</strong></td>
+            <td><code>railway.app</code></td>
+            <td>Hospedagem completa: backend + frontend + banco</td>
+            <td>Login com GitHub. <strong>Exige cartão de crédito</strong> para plano Hobby</td>
+          </tr>
+          <tr>
+            <td>P2</td>
+            <td><strong>GitHub</strong></td>
+            <td><code>github.com</code></td>
+            <td>Repositório fonte para deploy automático</td>
+            <td>Já deve existir</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>Premissas técnicas</h3>
+      <ul>
+        <li><strong>P3</strong> — O repositório deve estar no <strong>GitHub</strong> (público ou privado — Railway suporta ambos)</li>
+        <li><strong>P4</strong> — Branch principal (<code>master</code>) é a branch de produção. Push nela = novo deploy automático nos três serviços</li>
+        <li><strong>P5</strong> — O banco atual é SQLite local (<code>contatos.db</code>). Os dados de desenvolvimento <strong>não serão migrados</strong> — o banco Railway PostgreSQL iniciará vazio e as migrations do Alembic criarão as tabelas automaticamente</li>
+        <li><strong>P6</strong> — Será necessário criar o <strong>primeiro usuário administrador</strong> manualmente após o deploy (o sistema possui autenticação JWT sem cadastro público de admin)</li>
+        <li><strong>P7</strong> — Diferentemente do Render free tier, o Railway <strong>não hiberna</strong> os serviços. O backend responde instantaneamente a qualquer hora</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ARQUITETURA -->
+  <div class="section">
+    <h2>Arquitetura final</h2>
+    <div class="arch-box">
+<span class="arch-highlight">GitHub</span> (branch master)
+  │
+  ▼ deploy automático
+<span class="arch-highlight">Railway Project</span>: "agentic-squad"
+  │
+  ├── Service: <span class="arch-highlight">backend</span>      FastAPI / uvicorn
+  │     └── URL pública   <span class="arch-url">https://backend-xxxx.up.railway.app</span>
+  │           │ rede privada Railway <span class="arch-comment">(mais rápido, sem tráfego externo)</span>
+  │           ▼
+  ├── Service: <span class="arch-highlight">postgresql</span>   PostgreSQL 15 gerenciado
+  │     └── DATABASE_URL injetado automaticamente pelo Railway
+  │
+  └── Service: <span class="arch-highlight">frontend</span>     Next.js 14
+        └── URL pública   <span class="arch-url">https://frontend-xxxx.up.railway.app</span>
+              │ NEXT_PUBLIC_API_URL → backend URL pública
+              ▼
+           FastAPI backend</div>
+    <p style="margin-top:.8rem;font-size:.85rem;color:#6b7280;">
+      <strong>Vantagem chave:</strong> backend e banco se comunicam pela <strong>rede privada interna</strong> do Railway —
+      mais rápido e sem tráfego externo. Na opção Vercel+Render+Supabase esse caminho ocorre pela internet pública.
+    </p>
+  </div>
+
+  <!-- ETAPA 1 -->
+  <div class="etapa etapa-1">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 1 — Preparação local do código</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Garantir que o código esteja pronto para produção antes de qualquer deploy</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~45–60 min</strong>
+        <span class="executor exec-claude">Claude Code executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>1.1 — Ajuste do <code>alembic/env.py</code> para usar variável de ambiente</h3>
+      <p>O Alembic atualmente tem a URL SQLite hardcoded no <code>alembic.ini</code>. Será alterado o <code>alembic/env.py</code> para ler <code>DATABASE_URL</code> do ambiente em tempo de execução. Railway injeta <code>DATABASE_URL</code> automaticamente quando o serviço PostgreSQL é vinculado ao backend — sem configuração manual necessária. Sem esse ajuste, as migrations falham ou criam tabelas no arquivo SQLite local em vez do PostgreSQL.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.2 — Adicionar CORS ao <code>app/main.py</code></h3>
+      <p>O frontend no Railway (domínio <code>*.up.railway.app</code>) precisa de permissão explícita para chamar a API. Será adicionado o middleware <code>CORSMiddleware</code> do FastAPI, lendo <code>CORS_ORIGINS</code> de variável de ambiente. Sem isso, o browser bloqueia todas as requisições — o app fica inacessível para o usuário final.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.3 — Criar <code>Procfile</code> no diretório <code>backend/</code></h3>
+      <p>Railway detecta o <code>Procfile</code> automaticamente para saber como iniciar a aplicação Python.</p>
+      <pre>web: uvicorn app.main:app --host 0.0.0.0 --port $PORT</pre>
+    </div>
+
+    <div class="sub">
+      <h3>1.4 — Criar <code>railway.toml</code> no diretório <code>backend/</code> <em>(recomendado)</em></h3>
+      <p>Arquivo de configuração declarativa do Railway. Permite definir build command, start command e health check diretamente no repositório. Facilita reproduzir o setup em outro ambiente ou onboarding de novos membros.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.5 — Criar <code>.env.example</code> em <code>backend/</code> e <code>frontend/</code></h3>
+      <p>Documentação de referência com todas as variáveis necessárias (sem valores reais). Servirá como guia ao configurar as variáveis no painel Railway.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.6 — Verificar <code>.gitignore</code></h3>
+      <p>Confirmar que <code>.env</code> e <code>contatos.db</code> não estão sendo versionados. Previne exposição acidental de segredos no GitHub.</p>
+    </div>
+
+    <div class="sub">
+      <h3>1.7 — Commit e push das alterações</h3>
+      <p>Criar commit com todas as mudanças de preparação e push para <code>master</code> no GitHub.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 2 -->
+  <div class="etapa etapa-2">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 2 — Configuração do projeto Railway</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Criar o projeto e os serviços na plataforma</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~15–20 min</strong>
+        <span class="executor exec-voce">Você executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>2.1 — Criar conta e assinar plano Hobby</h3>
+      <ul>
+        <li>Acessar <code>railway.app</code> → "Sign in with GitHub"</li>
+        <li>Após login: Settings → Billing → Upgrade to Hobby ($5/mês)</li>
+        <li>Cadastrar cartão de crédito</li>
+        <li><em>Nota:</em> o plano Trial ($5 crédito único, sem cartão) pode ser usado para testes, mas os serviços param quando o crédito acaba</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.2 — Criar o projeto Railway</h3>
+      <ul>
+        <li>Dashboard → "New Project" → "Deploy from GitHub repo"</li>
+        <li>Selecionar o repositório</li>
+        <li>Cancelar o wizard automático e configurar manualmente cada serviço (mais controle)</li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h3>2.3 — Adicionar serviço PostgreSQL</h3>
+      <ul>
+        <li>Dentro do projeto → "New Service" → "Database" → "Add PostgreSQL"</li>
+        <li>Railway provisiona o banco em ~30 segundos</li>
+        <li>A <code>DATABASE_URL</code> é gerada automaticamente e ficará disponível para injeção nos outros serviços via referência</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ETAPA 3 -->
+  <div class="etapa etapa-3">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 3 — Deploy do backend (FastAPI)</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Colocar a API FastAPI online no Railway</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~20–25 min</strong>
+        <span class="executor exec-voce">Você executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>3.1 — Criar serviço de backend</h3>
+      <p>No projeto Railway → "New Service" → "GitHub Repo". Configurar:</p>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Service Name</td><td><code>backend</code></td></tr>
+          <tr><td>Root Directory</td><td><code>backend</code></td></tr>
+          <tr><td>Build Command</td><td><code>pip install -r requirements.txt</code></td></tr>
+          <tr><td>Start Command</td><td><code>uvicorn app.main:app --host 0.0.0.0 --port $PORT</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>3.2 — Vincular o PostgreSQL ao backend</h3>
+      <p>Na aba "Variables" do serviço backend → "Add Reference" → selecionar o serviço PostgreSQL e adicionar a variável <code>DATABASE_URL</code>. Railway injeta automaticamente a connection string correta — <strong>sem copiar/colar manual</strong>.</p>
+    </div>
+
+    <div class="sub">
+      <h3>3.3 — Configurar variáveis de ambiente do backend</h3>
+      <table>
+        <thead><tr><th>Variável</th><th>Valor</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td><code>DATABASE_URL</code></td><td><em>(via referência)</em></td><td>Adicionada na etapa 3.2 — não inserir manualmente</td></tr>
+          <tr><td><code>SECRET_KEY</code></td><td>string aleatória 64 chars</td><td>Gerar com <code>python -c "import secrets; print(secrets.token_hex(32))"</code></td></tr>
+          <tr><td><code>ENV</code></td><td><code>production</code></td><td>Ativa logs JSON estruturados</td></tr>
+          <tr><td><code>ALGORITHM</code></td><td><code>HS256</code></td><td>Algoritmo JWT</td></tr>
+          <tr><td><code>ACCESS_TOKEN_EXPIRE_MINUTES</code></td><td><code>60</code></td><td>Expiração do token</td></tr>
+          <tr><td><code>CORS_ORIGINS</code></td><td><em>preencher após Etapa 4</em></td><td>URL do frontend gerada pelo Railway</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>3.4 — Gerar URL pública do backend</h3>
+      <p>Aba "Settings" → "Networking" → "Generate Domain". Railway gera: <code>https://backend-xxxx.up.railway.app</code>. Anotar essa URL — será usada como <code>NEXT_PUBLIC_API_URL</code> no frontend.</p>
+    </div>
+
+    <div class="sub">
+      <h3>3.5 — Primeiro deploy e execução das migrations</h3>
+      <p>O deploy inicia automaticamente após a configuração (~3–5 minutos). Após build bem-sucedido, executar as migrations via Railway Shell:</p>
+      <pre>alembic upgrade head</pre>
+      <p style="margin-top:.5rem;">Isso criará todas as tabelas no PostgreSQL. O projeto possui 5 migrations: <em>initial, deletado_em, auditoria, indices, indices sort/filter</em>.</p>
+    </div>
+
+    <div class="sub">
+      <h3>3.6 — Verificar a API</h3>
+      <p>Acessar <code>https://backend-xxxx.up.railway.app/docs</code> → Swagger UI deve aparecer e confirmar que a API está respondendo.</p>
+    </div>
+
+    <div class="sub">
+      <h3>3.7 — Criar o primeiro usuário administrador</h3>
+      <p>Via Railway Shell no serviço backend, executar script de seed ou chamada ao endpoint de criação de usuário. O banco inicia vazio — sem esse passo não é possível fazer login no sistema.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 4 -->
+  <div class="etapa etapa-4">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 4 — Deploy do frontend (Next.js)</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Colocar o frontend online no Railway</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~15–20 min</strong>
+        <span class="executor exec-voce">Você executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>4.1 — Criar serviço de frontend</h3>
+      <p>No projeto Railway → "New Service" → "GitHub Repo". Configurar:</p>
+      <table>
+        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Service Name</td><td><code>frontend</code></td></tr>
+          <tr><td>Root Directory</td><td><code>frontend</code></td></tr>
+          <tr><td>Build Command</td><td><code>npm ci &amp;&amp; npm run build</code></td></tr>
+          <tr><td>Start Command</td><td><code>npm start</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>4.2 — Configurar variável de ambiente do frontend</h3>
+      <table>
+        <thead><tr><th>Variável</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td><code>NEXT_PUBLIC_API_URL</code></td><td>URL gerada na Etapa 3.4 — ex.: <code>https://backend-xxxx.up.railway.app</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>4.3 — Gerar URL pública do frontend</h3>
+      <p>Aba "Settings" → "Networking" → "Generate Domain". Railway gera: <code>https://frontend-xxxx.up.railway.app</code>. Anotar essa URL — será usada para atualizar o CORS do backend.</p>
+    </div>
+
+    <div class="sub">
+      <h3>4.4 — Deploy</h3>
+      <p>Build do Next.js (<code>npm run build</code>) + start (<code>npm start</code>) — aguardar ~3–5 minutos. Acessar a URL gerada para confirmar que o frontend carrega.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 5 -->
+  <div class="etapa etapa-5">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 5 — Conexão e validação completa</h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Conectar frontend e backend e validar o sistema</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~15–20 min</strong>
+        <span class="executor exec-ambos">Você + Claude Code</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>5.1 — Atualizar CORS no backend</h3>
+      <p>Serviço backend no Railway → Variables → atualizar <code>CORS_ORIGINS</code> com a URL real do frontend: <code>https://frontend-xxxx.up.railway.app</code>. Railway faz redeploy automático (~1–2 minutos).</p>
+    </div>
+
+    <div class="sub">
+      <h3>5.2 — Smoke test completo</h3>
+      <table>
+        <thead><tr><th>#</th><th>Teste</th><th>Resultado esperado</th></tr></thead>
+        <tbody>
+          <tr><td>T1</td><td>Acessar URL do frontend</td><td>Página de login carrega sem erros</td></tr>
+          <tr><td>T2</td><td>Login com usuário admin (criado na Etapa 3.7)</td><td>Redireciona para /contatos</td></tr>
+          <tr><td>T3</td><td>Criar um novo contato</td><td>Contato aparece na lista imediatamente</td></tr>
+          <tr><td>T4</td><td>Buscar / filtrar / ordenar contatos</td><td>Resultados corretos</td></tr>
+          <tr><td>T5</td><td>Exportar CSV e XLSX</td><td>Download inicia corretamente</td></tr>
+          <tr><td>T6</td><td>Logout + tentativa de rota protegida</td><td>Redireciona para /login</td></tr>
+          <tr><td>T7</td><td>Login com usuário não-admin</td><td>Botões de editar/excluir não aparecem</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3>5.3 — Verificar logs e saúde dos serviços</h3>
+      <p>Railway Dashboard → aba "Logs" de cada serviço em tempo real. Verificar que não há erros <code>500</code> ou falhas de conexão com o banco.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 6 -->
+  <div class="etapa etapa-6">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 6 — Automação de migrations <em>(opcional, recomendada)</em></h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Garantir que novas migrations rodem automaticamente a cada deploy</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~15–20 min</strong>
+        <span class="executor exec-claude">Claude Code executa</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>6.1 — Adicionar pre-deploy command no <code>railway.toml</code></h3>
+      <p>Configurar o Railway para rodar <code>alembic upgrade head</code> antes de cada novo deploy. Isso garante que futuras alterações no banco sejam aplicadas automaticamente. Sem isso, cada nova migration precisaria ser rodada manualmente via Shell.</p>
+    </div>
+  </div>
+
+  <!-- ETAPA 7 -->
+  <div class="etapa etapa-7">
+    <div class="etapa-header">
+      <div>
+        <h2>Etapa 7 — Hardening básico <em>(opcional, pós-validação)</em></h2>
+        <p style="font-size:.85rem;color:#6b7280;margin-top:.3rem;">Melhorias de segurança e operabilidade — não bloqueante</p>
+      </div>
+      <div class="etapa-meta">
+        <strong>~30–60 min</strong>
+        <span class="executor exec-opcional">Opcional</span>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>7.1 — Domínio customizado</h3>
+      <p>Railway permite adicionar domínio próprio gratuitamente no plano Hobby. Precisaria adquirir um domínio (~R$40–80/ano). Configuração: painel Railway → Settings → Custom Domain.</p>
+    </div>
+
+    <div class="sub">
+      <h3>7.2 — GitHub Actions para CI</h3>
+      <p>Adicionar workflow que roda <code>pytest</code> (backend) e <code>next lint</code> + <code>jest</code> (frontend) a cada PR. Bloqueia merge de código quebrado antes de chegar à produção. Railway já faz deploy automático — o CI seria uma camada de qualidade adicional.</p>
+    </div>
+
+    <div class="sub">
+      <h3>7.3 — Health Check configurado no Railway</h3>
+      <p>Railway suporta health check endpoint nativo. Configurar para monitorar <code>/health</code> ou <code>/</code> e reiniciar automaticamente se ficar unhealthy.</p>
+    </div>
+  </div>
+
+  <!-- ALTERAÇÕES DE CÓDIGO -->
+  <div class="section">
+    <h2>Alterações de código necessárias</h2>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:.8rem;">Apenas 5 arquivos serão criados ou modificados na Etapa 1:</p>
+    <table>
+      <thead>
+        <tr><th>Arquivo</th><th>Tipo</th><th>Mudança</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>backend/alembic/env.py</code></td>
+          <td><span class="tag tag-yellow" style="font-size:.72rem;">Modificação</span></td>
+          <td>Ler <code>DATABASE_URL</code> do ambiente para sobrepor a URL do <code>alembic.ini</code></td>
+        </tr>
+        <tr>
+          <td><code>backend/app/main.py</code></td>
+          <td><span class="tag tag-yellow" style="font-size:.72rem;">Modificação</span></td>
+          <td>Adicionar <code>CORSMiddleware</code> com <code>CORS_ORIGINS</code> do ambiente</td>
+        </tr>
+        <tr>
+          <td><code>backend/Procfile</code></td>
+          <td><span class="tag tag-blue" style="font-size:.72rem;">Criação</span></td>
+          <td>Start command para o Railway: <code>uvicorn app.main:app --host 0.0.0.0 --port $PORT</code></td>
+        </tr>
+        <tr>
+          <td><code>backend/railway.toml</code></td>
+          <td><span class="tag tag-blue" style="font-size:.72rem;">Criação</span></td>
+          <td>Configuração declarativa (build, start, health check, pre-deploy)</td>
+        </tr>
+        <tr>
+          <td><code>backend/.env.example</code></td>
+          <td><span class="tag tag-blue" style="font-size:.72rem;">Criação</span></td>
+          <td>Documentação das variáveis necessárias</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- RESUMO FINAL -->
+  <div class="summary-bar">
+    <h2>Resumo das etapas</h2>
+    <div class="summary-row">
+      <span class="label">Etapa 1 — Preparação local do código</span>
+      <span class="value">~45–60 min</span>
+      <span class="executor exec-claude exec-tag">Claude Code</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 2 — Setup Railway (conta + projeto + banco)</span>
+      <span class="value">~15–20 min</span>
+      <span class="executor exec-voce exec-tag">Você</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 3 — Deploy backend no Railway</span>
+      <span class="value">~20–25 min</span>
+      <span class="executor exec-voce exec-tag">Você</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 4 — Deploy frontend no Railway</span>
+      <span class="value">~15–20 min</span>
+      <span class="executor exec-voce exec-tag">Você</span>
+    </div>
+    <div class="summary-row">
+      <span class="label">Etapa 5 — Conexão e validação completa</span>
+      <span class="value">~15–20 min</span>
+      <span class="executor exec-ambos exec-tag">Você + Claude</span>
+    </div>
+    <div class="summary-row" style="border-top:1px solid #475569;padding-top:.8rem;margin-top:.4rem;">
+      <span class="label" style="color:#f1f5f9;font-weight:700;">Total estimado (Etapas 1–5)</span>
+      <span class="value" style="color:#a78bfa;font-size:1.05rem;">~1h50min – 2h25min</span>
+      <span></span>
+    </div>
+  </div>
+
+  <!-- LIMITAÇÕES -->
+  <div class="section">
+    <h2>Limitações do plano gratuito / Hobby a conhecer</h2>
+    <table>
+      <thead><tr><th>Limitação</th><th>Impacto</th><th>Solução futura</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Plano mínimo $5 USD/mês</td>
+          <td>Custo fixo mesmo com baixo uso</td>
+          <td>Sem alternativa no Railway — considerar opção gratuita</td>
+        </tr>
+        <tr>
+          <td>PostgreSQL Railway: 1GB storage no Hobby</td>
+          <td>Suficiente para centenas de milhares de contatos</td>
+          <td>Upgrade de plano conforme necessidade</td>
+        </tr>
+        <tr>
+          <td>512MB RAM por serviço no Hobby</td>
+          <td>Suficiente para o app atual</td>
+          <td>Upgrade para Pro ($20/mês) se necessário</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    Plano gerado em 21 de maio de 2026 &nbsp;|&nbsp; Agentic Squad — Contact Management App &nbsp;|&nbsp; Opção: Railway MVP
+  </footer>
+
+</div>
+</body>
+</html>

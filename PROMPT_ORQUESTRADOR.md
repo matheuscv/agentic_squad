@@ -27,7 +27,7 @@ Agora precisaremos evoluir este projeto com algumas melhorias e novas funcionali
 feito em fases, e abaixo segue o escopo a ser considerado para a fase atual.
 
 
-Busque no arquivo melhorias_v2.html dentro do diretório /docs/release_notes e se organize para implementar as fases: B.1, B.2 apenas.
+Busque no arquivo melhorias_v2.html dentro do diretório /docs/release_notes e se organize para implementar as fases: E.2 apenas.
 
 
 ═══════════════════════════════════════════════════════════════════

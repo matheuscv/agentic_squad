@@ -1,137 +1,285 @@
-# PRD — Fase B.1 + B.2 — Observabilidade backend (Logging estruturado e Tratamento centralizado de exceções)
+# PRD — Melhorias v2 Fase D (D.1, D.3, D.4, D.5)
 
-## 1. Visão Geral
+## 1. Visao Geral e Contexto
 
-O Contact Management App (backend FastAPI + frontend Next.js 14) já concluiu as Fases 1, 3.1 e 3.2, entregando correções imediatas, soft delete, lixeira, auditoria de criação/atualização, rate limiting e validação Zod. Apesar dessas evoluções, o backend ainda não tem **logging estruturado** nem **tratamento centralizado de exceções**, o que dificulta a investigação de incidentes, esconde erros silenciosamente (existe um `except Exception: pass` em `backend/app/main.py:36`) e impede correlação de eventos por requisição.
+Este PRD consolida o escopo da Fase D parcial do roadmap de melhorias v2 do Contact
+Management App (FastAPI + Next.js 14), cobrindo quatro entregas de UX e novas
+funcionalidades para a gestao de contatos:
 
-Esta entrega corresponde **exclusivamente** aos itens **B.1 (Logging estruturado em JSON)** e **B.2 (Tratamento centralizado de exceções)** da Fase B do roadmap v2. Trata-se de uma fase preparatória obrigatória para qualquer operação real do sistema, sem alterações de contratos públicos da API nem novas features funcionais para o usuário final.
+- D.1 — Ordenacao de colunas na tabela de contatos
+- D.3 — Mascara e validacao de telefone
+- D.4 — Filtros avancados de contatos
+- D.5 — Exportar contatos (CSV / Excel)
 
-## 2. Objetivo
+O produto ja conta com: paginacao, busca textual com debounce, soft delete (lixeira),
+auditoria de criacao/atualizacao (`criado_por_id` / `atualizado_por_id`), autenticacao
+JWT, rate limiting, logging estruturado em JSON (B.1) e tratamento centralizado de
+excecoes (B.2). As fases A (seguranca), B.3 a B.5 (Sentry, audit log persistente,
+healthcheck) e a Fase E (infraestrutura) permanecem fora deste ciclo.
 
-Habilitar observabilidade operacional do backend de forma que qualquer requisição possa ser rastreada ponta-a-ponta por um `request_id`, e que toda exceção lançada pelas camadas de serviço seja convertida automaticamente em uma resposta HTTP semanticamente correta, com stack trace registrado em log estruturado, eliminando a captura silenciosa de exceções existente hoje.
+Stack ja em uso:
 
-## 3. Público-Alvo
+- Backend: FastAPI + SQLAlchemy 2.x + SQLite, em `backend/`
+- Frontend: Next.js 14 + React + Tailwind + react-hook-form + Zod, em `frontend/`
+- Autenticacao JWT (em `localStorage` hoje — migracao para httpOnly cookie e Fase A.1, fora deste PRD)
 
-- **Squad de engenharia** (devs e SRE) que precisa investigar incidentes em ambiente produtivo.
-- **Tech Lead / Code reviewer** que precisa garantir que o backend siga padrões de logging e de propagação de erros.
-- **Operações futuras** (Sentry, agregadores de log, K8s) que dependem de logs estruturados para alertas e dashboards.
+## 2. Objetivos de Negocio
 
-## 4. Premissas e Decisões
+- **Reduzir tempo de localizacao de contato**: ordenacao por colunas + filtros avancados
+  permitem ao usuario operacional encontrar registros sem depender de busca textual
+  livre, especialmente em bases com centenas ou milhares de contatos.
+- **Aumentar qualidade dos dados**: mascara e validacao de telefone padronizam o
+  formato `(99) 99999-9999` na origem (frontend) e reforcam a regra no backend,
+  reduzindo retrabalho e falhas em integracoes futuras (importacao, dashboards).
+- **Habilitar consumo externo dos dados**: exportacao em CSV/Excel respeitando o
+  filtro/busca atual permite uso em planilhas, relatorios e BIs sem necessidade de
+  acesso direto ao banco.
+- **Preparar base para evolucoes**: os filtros e a ordenacao reusam o hook
+  `useDebounce` (C.2) e dependem de indices em colunas frequentes (C.6), o que
+  reduz custo das proximas fases D.6 (import) e D.7 (dashboard).
 
-- **Sem alterações em contratos públicos da API** — todos os endpoints continuam respondendo com o mesmo schema atual; apenas a forma de produzir esses status codes muda internamente.
-- **Biblioteca escolhida para JSON logging:** `python-json-logger` (sugerida no item B.1 da release v2). Decisão registrada para evitar avaliação adicional no momento do desenvolvimento.
-- **Ambiente DEV mantém logs em texto legível** (formato `%(asctime)s %(levelname)s %(name)s %(message)s`); ambiente PROD usa JSON. A escolha é dirigida pela variável de ambiente `ENV` já existente em `backend/app/config.py`.
-- **`request_id` é gerado por middleware**; se o header `X-Request-ID` chegar na requisição, ele é reutilizado (idempotência com proxies/edge); caso contrário, gera-se um UUID v4.
-- **`user_id` é obtido do contexto JWT** quando disponível (usuário autenticado); para rotas públicas ou anônimas, o campo fica como `null` no log.
-- **Dados sensíveis NUNCA são logados** — payloads de senha, tokens, headers `Authorization`, e qualquer PII além do `user_id` estão proibidos. Implementação deve incluir filtro de redaction explícito.
-- **Refatoração de `HTTPException` ad-hoc** é feita somente onde a substituição por exceção tipada faz sentido de domínio (ex: contato não encontrado vira `NotFoundError`). Onde já há controle local de status code que não corresponde a um conceito de domínio, mantém-se como está para não inflar o escopo.
-- **Compatibilidade com testes existentes**: a suíte atual de testes regressivos (Fases 3.1 e 3.2) deve continuar verde sem modificações.
-- **Sem dependência de serviços externos** — Sentry (B.3) está fora do escopo desta entrega.
+## 3. Publico-Alvo
+
+- **Usuarios operacionais** da aplicacao (atendimento/cadastro), que listam, buscam
+  e ordenam contatos no dia a dia.
+- **Gestores** que precisam exportar bases filtradas para acompanhamento offline
+  ou compartilhamento com areas parceiras.
+- **Desenvolvedores da squad**, que herdarao o hook `useDebounce` e os indices
+  como base para D.6 e D.7.
+
+## 4. Premissas e Decisoes
+
+- **D.2 (CRUD de usuarios) NAO esta no escopo** desta entrega; sera tratada em ciclo
+  separado.
+- A migracao do JWT para httpOnly cookie (Fase A.1) **nao depende** deste PRD; as
+  novas rotas continuam usando o mesmo esquema de autenticacao atual.
+- O banco continua sendo **SQLite** durante esta fase. Volume de exportacao sera
+  limitado por configuracao (premissa: ate 50.000 linhas por exportacao em SQLite
+  sem degradacao critica). Migracao para PostgreSQL (E.2) e fora de escopo.
+- O hook `useDebounce` (C.2) sera criado ou consumido como parte deste pacote caso
+  ainda nao exista isolado; a referencia ad-hoc em `contatos/page.tsx` sera
+  substituida.
+- Indices das colunas frequentes (`nome`, `email`, `criado_em`, `empresa`) serao
+  criados via migration Alembic dentro deste pacote — adianta C.6 do roadmap, na
+  parte estritamente necessaria para D.1 e D.4.
+- Exportacao **Excel** sera implementada com biblioteca `openpyxl` (formato `.xlsx`).
+  CSV usara a stdlib (`csv` + StreamingResponse).
+- O botao de exportar respeita **busca textual + filtros + ordenacao atuais**, mas
+  **ignora paginacao** (exporta o conjunto completo que casa com os filtros).
+- A mascara de telefone aceita apenas o formato BR `(99) 99999-9999` (celular com
+  9 digitos). Validacao backend usara regex equivalente. Telefone permanece
+  **opcional** no modelo (premissa mantida do estado atual).
+- Logs estruturados (B.1) e handlers globais (B.2) serao reaproveitados — qualquer
+  nova rota deve emitir log com `request_id`, `route`, `duration_ms`.
 
 ## 5. Requisitos Funcionais
 
-- **RF-01 — Logger nomeado em services e routers**: Todo módulo dentro de `backend/app/services/` e `backend/app/routers/` deve declarar `logger = logging.getLogger(__name__)` no topo do arquivo e emitir logs nos pontos de entrada/saida relevantes (sucesso, erro tratado, decisão de negócio).
+### D.1 — Ordenacao de colunas
 
-- **RF-02 — Configuração de logging JSON em produção**: Em `ENV=production`, o backend deve configurar um handler raiz com formato JSON usando `python-json-logger`, contendo no mínimo os campos: `timestamp`, `level`, `logger`, `message`, `request_id`, `user_id`, `route`, `duration_ms`. Em `ENV=development` o formato deve ser texto legível em uma linha.
+- **RF-01**: O endpoint `GET /contatos/` deve aceitar os parametros opcionais
+  `sort_by` (enum: `nome`, `email`, `empresa`, `telefone`, `criado_em`,
+  `atualizado_em`) e `sort_order` (enum: `asc`, `desc`, default `asc`).
+- **RF-02**: O frontend, na pagina `/contatos`, deve renderizar icones de seta nos
+  headers ordenaveis (`nome`, `email`, `empresa`, `criado_em`), alternando entre
+  estados **sem ordenacao**, **ASC** e **DESC** ao clicar. A ordenacao atual deve
+  ser refletida na URL (querystring) para permitir compartilhamento e refresh.
 
-- **RF-03 — Middleware de `request_id` e medição de duração**: Um middleware FastAPI deve, para cada requisição, (a) ler `X-Request-ID` do header ou gerar um UUID v4, (b) armazenar o valor em `contextvars` acessível por todo o ciclo da requisição, (c) marcar o tempo de início, (d) ao final da requisição emitir um log estruturado com `request_id`, `route` (path template), `method`, `status_code`, `duration_ms`, `user_id` (se autenticado) e (e) devolver `X-Request-ID` no header de resposta.
+### D.3 — Mascara e validacao de telefone
 
-- **RF-04 — Hierarquia de exceções de domínio**: Criar `backend/app/exceptions.py` contendo, no mínimo, as classes: `DomainError` (base, derivada de `Exception`), `NotFoundError`, `ConflictError`, `ValidationError`, `AuthenticationError`, `AuthorizationError`. Cada classe aceita `message: str` e `details: dict | None` no construtor.
+- **RF-03**: O componente `ContatoForm` (frontend) deve aplicar a mascara
+  `(99) 99999-9999` ao campo telefone usando `react-input-mask` (ja presente em
+  `package.json`). O valor enviado ao backend pode ser o texto formatado ou
+  digits-only, conforme padrao definido pelo time, **mas o contrato deve ser unico
+  e documentado** no schema Zod.
+- **RF-04**: O schema Zod do frontend (`frontend/src/lib/schemas.ts`) deve validar
+  telefone como opcional e, quando preenchido, exigir o formato `(99) 99999-9999`
+  (ou 11 digitos numericos, conforme decisao do contrato). O schema Pydantic do
+  backend (`backend/app/schemas/contato.py`) deve aplicar regra equivalente
+  (regex) e devolver erro 422 com mensagem clara em caso de violacao.
 
-- **RF-05 — Exception handlers globais no FastAPI**: Registrar handlers globais que convertam:
-  - `NotFoundError` -> HTTP 404
-  - `ConflictError` -> HTTP 409
-  - `ValidationError` -> HTTP 422
-  - `AuthenticationError` -> HTTP 401
-  - `AuthorizationError` -> HTTP 403
-  - `DomainError` (genérica não mapeada acima) -> HTTP 400
-  - `Exception` (qualquer não tratada) -> HTTP 500 com payload genérico (sem vazar stack trace ao cliente)
+### D.4 — Filtros avancados
 
-  Todos os handlers devem registrar o evento no logger estruturado, com `exc_info=True` para `Exception` e `DomainError`, incluindo `request_id` no contexto.
+- **RF-05**: A pagina `/contatos` deve exibir um **painel "Filtros" colapsavel**
+  acima da tabela, com os seguintes campos:
+  - empresa (input texto, debounced)
+  - data de criacao inicial e final (date pickers)
+  - checkbox "sem email"
+  - checkbox "sem telefone"
+- **RF-06**: O endpoint `GET /contatos/` deve aceitar os parametros opcionais
+  `empresa`, `criado_de` (date), `criado_ate` (date), `sem_email` (bool),
+  `sem_telefone` (bool), combinaveis entre si e com `search`, `sort_by`,
+  `sort_order` e paginacao. O estado de filtros deve ser refletido na URL.
 
-- **RF-06 — Remoção do `except Exception: pass`**: O bloco em `backend/app/main.py:36` deve ser eliminado e substituído pelo uso correto da infraestrutura de exceções, sem omitir falhas. Caso a finalidade original do bloco fosse tolerar a ausência de um recurso (ex: criação opcional de tabelas), o tratamento explícito deve logar o erro em nível `WARNING` e continuar; caso fosse erro acidental, deve propagar.
+### D.5 — Exportar contatos
 
-- **RF-07 — Refactor seletivo de `HTTPException` para exceções de domínio**: Onde já existem `raise HTTPException(status_code=404, ...)` claramente vinculados a "recurso não encontrado" (ex: contato/usuário inexistente) e `HTTPException(status_code=409, ...)` para "email duplicado", substituir por `NotFoundError` / `ConflictError`. O comportamento HTTP visível ao cliente deve permanecer idêntico.
+- **RF-07**: A pagina `/contatos` deve exibir um botao **"Exportar"** com menu de
+  formato (CSV / Excel). Ao acionar, o frontend chama o endpoint de exportacao
+  passando **busca, filtros e ordenacao atuais** (paginacao ignorada).
+- **RF-08**: O backend deve expor `GET /contatos/export?format=csv|xlsx` (ou rota
+  equivalente) que aceita os mesmos parametros de filtro/busca/ordenacao do
+  `GET /contatos/` e devolve um **StreamingResponse** com:
+  - `Content-Type` apropriado (`text/csv; charset=utf-8` ou
+    `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`)
+  - `Content-Disposition: attachment; filename="contatos_YYYYMMDD_HHMMSS.<ext>"`
+  - Colunas: `id`, `nome`, `email`, `telefone`, `empresa`, `criado_em`,
+    `atualizado_em` (ordem fixa, headers em PT-BR).
+- **RF-09**: A exportacao **NAO** deve incluir contatos em lixeira (soft-deleted),
+  alinhada ao comportamento atual da listagem.
+- **RF-10**: A exportacao deve ser registrada nos logs estruturados (B.1) com
+  campos: `route`, `user_id`, `format`, `rows_exported`, `duration_ms`.
 
-- **RF-08 — Redaction de dados sensíveis em logs**: Implementar um filtro de logging que remova/mascare valores das chaves: `password`, `senha`, `token`, `access_token`, `refresh_token`, `authorization`, `secret`. O filtro é aplicado antes da serialização JSON.
+## 6. Requisitos Nao-Funcionais
 
-## 6. Requisitos Não-Funcionais
+- **RNF-01 (Performance — ordenacao/filtros)**: As consultas com `sort_by` e os
+  filtros de D.4 devem responder em < 300 ms (p95) para bases ate 50.000 contatos
+  em SQLite. Indices em `nome`, `email`, `empresa` e `criado_em` devem ser criados
+  via migration Alembic.
+- **RNF-02 (Performance — exportacao)**: A exportacao deve usar streaming
+  (`StreamingResponse`) para nao carregar todo o conjunto em memoria. Tempo total
+  de exportacao de 10.000 linhas em CSV deve ser < 5 segundos.
+- **RNF-03 (Seguranca)**: Todas as novas rotas devem exigir autenticacao JWT (mesma
+  dependencia das rotas existentes). Parametros de filtro/ordenacao devem ser
+  validados como **enums fechados** no backend para evitar SQL injection via
+  `sort_by` (sem concatenacao de string em queries — uso obrigatorio de
+  `getattr(Model, col)` apos validacao em allowlist).
+- **RNF-04 (Observabilidade)**: Toda nova rota deve emitir log estruturado JSON
+  herdando o `request_id` do middleware existente, incluindo `duration_ms` e
+  parametros relevantes (sem PII alem do `user_id`). Erros devem passar pelo
+  handler global de excecoes (B.2).
+- **RNF-05 (Validacao)**: Schemas Pydantic devem rejeitar combinacoes invalidas
+  (ex: `criado_de` > `criado_ate`) com erro 422 e mensagem clara.
+- **RNF-06 (UX)**: O painel de filtros deve manter o estado ao paginar e ao trocar
+  ordenacao. Filtros e ordenacao devem refletir na URL (deep link).
+- **RNF-07 (Acessibilidade)**: Headers ordenaveis devem expor `aria-sort`. Botao
+  "Exportar" e dropdown de formato devem expor `aria-label`. Alinhado com D.10
+  (a11y) embora D.10 esteja fora de escopo geral.
+- **RNF-08 (Compatibilidade)**: A exportacao XLSX deve abrir corretamente em
+  Microsoft Excel 2016+, LibreOffice Calc 7+ e Google Sheets.
+- **RNF-09 (Cobertura de testes)**: Backend — novos endpoints e parametros devem
+  manter regressivo verde e cobertura >= 95% no modulo de contatos. Frontend —
+  ao menos um teste por feature (D.1, D.3, D.4, D.5) cobrindo o caminho feliz.
+- **RNF-10 (Internacionalizacao de numeros/datas)**: Datas exibidas no painel de
+  filtros e na exportacao devem seguir o locale `pt-BR` (DD/MM/AAAA), exceto no
+  nome do arquivo (que usa timestamp ISO compacto).
 
-- **RNF-01 — Performance**: A introdução de logging e middleware não pode aumentar a latência média (p50) de endpoints em mais de **5 ms**, e a p95 em mais de **15 ms**, medidos com a suíte de testes atual. Logging em `INFO` deve ser usado com parcimônia em hot paths.
+## 7. Stack Tecnica Sugerida
 
-- **RNF-02 — Compatibilidade de ambiente**: Ambiente `development` mantém logs legíveis (texto, uma linha por evento) para não atrapalhar o debug local. Comportamento controlado por `ENV` em `backend/app/config.py`.
+- **Linguagem (backend)**: Python 3.11+
+- **Framework (backend)**: FastAPI (existente) + SQLAlchemy 2.x
+- **Persistencia**: SQLite (existente) + Alembic para nova migration de indices
+- **Exportacao**: stdlib `csv` (CSV) + `openpyxl` (XLSX) com StreamingResponse
+- **Linguagem (frontend)**: TypeScript
+- **Framework (frontend)**: Next.js 14 + React + Tailwind
+- **Formularios**: react-hook-form + Zod (existente) + `react-input-mask`
+  (ja em `package.json`)
+- **Testes**: pytest + httpx (backend); Jest + Testing Library (frontend)
 
-- **RNF-03 — Compatibilidade de contrato**: Nenhum endpoint pode mudar request schema, response schema ou status code observável após este PR. A suíte de testes existente deve passar sem alterações.
+## 8. Criterios de Aceite (por item)
 
-- **RNF-04 — Segurança de logs (LGPD / hardening)**: Logs NÃO podem conter senhas, tokens JWT, headers `Authorization`, ou qualquer credencial. A redaction (RF-08) é mandatória. Stack traces no log podem conter request_id e nome de função, mas nunca payloads brutos com PII.
+### D.1 — Ordenacao de colunas
 
-- **RNF-05 — Manutenibilidade**: O setup de logging deve estar centralizado em um módulo único (`backend/app/logging_config.py` ou similar) carregado uma única vez no startup. Nenhum `print()` deve permanecer no código de produção.
+- [ ] `GET /contatos/?sort_by=nome&sort_order=desc` retorna lista ordenada
+      decrescente por `nome`; valores invalidos retornam 422.
+- [ ] `sort_by` aceita apenas colunas da allowlist (`nome`, `email`, `empresa`,
+      `telefone`, `criado_em`, `atualizado_em`); qualquer outro valor retorna 422.
+- [ ] Headers ordenaveis em `/contatos` exibem icone de seta indicando estado
+      atual (none / asc / desc) e alternam ao clique.
+- [ ] Ordenacao escolhida persiste em refresh da pagina (via querystring).
+- [ ] Indice criado via migration Alembic em `contatos.nome`, `contatos.email`,
+      `contatos.criado_em`, `contatos.empresa`.
+- [ ] Tempo de resposta p95 < 300 ms com 50k contatos em base local.
 
-- **RNF-06 — Testabilidade**: Os exception handlers e o middleware de `request_id` devem ser cobertos por testes unitários/integrados (pytest), com pelo menos um caso por classe de exceção e um caso para a propagação do header `X-Request-ID`.
+### D.3 — Mascara e validacao de telefone
 
-## 7. Stack Técnica Sugerida
+- [ ] Campo telefone em `ContatoForm` aplica mascara `(99) 99999-9999` ao digitar.
+- [ ] Schema Zod rejeita telefones em formato invalido com mensagem clara em PT-BR.
+- [ ] Schema Pydantic do backend rejeita o mesmo conjunto (regex equivalente) com
+      422.
+- [ ] Telefone permanece opcional — submeter formulario sem telefone continua
+      funcionando.
+- [ ] Teste de unidade no frontend valida pelo menos: vazio (ok), formato correto
+      (ok), formato invalido (rejeita).
+- [ ] Teste de integracao no backend valida POST e PATCH de contato com telefone
+      valido (201/200) e invalido (422).
 
-- **Linguagem**: Python 3.11+ (mesma do backend atual)
-- **Framework**: FastAPI (mantido)
-- **Logging JSON**: `python-json-logger`
-- **Persistência**: SQLAlchemy (sem alterações)
-- **Testes**: `pytest` + `pytest-asyncio` + `httpx` (já em uso)
-- **Suporte ao `request_id`**: `contextvars` (stdlib) para propagação segura entre middleware, services e logger filters.
+### D.4 — Filtros avancados
 
-## 8. Critérios de Aceite (alto nível)
+- [ ] Painel "Filtros" e colapsavel (estado lembrado durante a sessao).
+- [ ] Filtros `empresa`, `criado_de`, `criado_ate`, `sem_email`, `sem_telefone`
+      sao aplicaveis isoladamente e combinaveis entre si.
+- [ ] `criado_de > criado_ate` retorna 422 com mensagem clara.
+- [ ] Filtros combinam com `search`, `sort_by`, `sort_order` e paginacao sem
+      perda de estado.
+- [ ] Filtro `empresa` usa o hook `useDebounce` (300 ms) para evitar chamadas
+      excessivas ao backend.
+- [ ] Filtros refletem na URL (deep link funcional).
+- [ ] Cobertura de teste cobre pelo menos: filtro por empresa, filtro por range
+      de data, filtros booleanos isolados, combinacao de dois filtros.
 
-- [ ] **CA-01**: Em `ENV=production`, ao chamar qualquer endpoint, o stdout produz exatamente 1 linha JSON por requisição contendo `request_id`, `user_id`, `route`, `duration_ms`, `status_code`.
-- [ ] **CA-02**: Em `ENV=development`, ao chamar qualquer endpoint, o stdout produz logs em texto legível, sem JSON.
-- [ ] **CA-03**: Enviar `X-Request-ID: abc-123` na requisição faz o mesmo valor aparecer no log estruturado e no header `X-Request-ID` da resposta.
-- [ ] **CA-04**: Ausência do header `X-Request-ID` na requisição faz o backend gerar um UUID v4 válido e devolvê-lo no header de resposta.
-- [ ] **CA-05**: Levantar `NotFoundError("contato")` em qualquer service produz HTTP 404 com payload `{"detail": "..."}` consistente.
-- [ ] **CA-06**: Levantar `ConflictError("email já existe")` produz HTTP 409.
-- [ ] **CA-07**: Levantar `AuthenticationError` produz HTTP 401; `AuthorizationError` produz HTTP 403.
-- [ ] **CA-08**: Levantar uma exceção não tratada (`Exception`) produz HTTP 500 com payload genérico (sem stack trace exposto), e o stack trace completo é registrado em log.
-- [ ] **CA-09**: O bloco `except Exception: pass` original em `backend/app/main.py:36` não existe mais no código (`grep -nR "except Exception: pass" backend/` retorna vazio).
-- [ ] **CA-10**: Um teste automatizado envia uma requisição com `password` no corpo e verifica que o log emitido contém o valor mascarado (ex: `"***"`) e não o texto original.
-- [ ] **CA-11**: A suíte de testes existente (Fases 1, 3.1, 3.2) passa 100% sem modificações nos testes.
-- [ ] **CA-12**: Pelo menos um endpoint que hoje usa `HTTPException(status_code=404, ...)` é refatorado para usar `NotFoundError`, mantendo o comportamento observável idêntico, com teste regressivo confirmando.
+### D.5 — Exportar contatos
 
-## 9. Definição de Pronto (DoD)
+- [ ] Botao "Exportar" visivel na pagina `/contatos` com opcao de formato
+      (CSV / Excel).
+- [ ] `GET /contatos/export?format=csv` devolve `Content-Type: text/csv;
+      charset=utf-8` e `Content-Disposition: attachment;
+      filename="contatos_YYYYMMDD_HHMMSS.csv"`.
+- [ ] `GET /contatos/export?format=xlsx` devolve `Content-Type:
+      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` e
+      `filename="contatos_YYYYMMDD_HHMMSS.xlsx"`.
+- [ ] A exportacao aplica os mesmos filtros, busca e ordenacao da listagem atual;
+      paginacao e ignorada.
+- [ ] Contatos em lixeira nao aparecem na exportacao.
+- [ ] Resposta usa streaming — exportar 10k linhas nao deve estourar memoria
+      acima de 50 MB no processo backend.
+- [ ] Log estruturado de cada exportacao registra `format`, `rows_exported`,
+      `user_id`, `duration_ms`.
+- [ ] Arquivo XLSX gerado abre sem aviso em Excel 2016+, LibreOffice Calc 7+ e
+      Google Sheets.
 
-- [ ] Código implementado e merged na `master` (ou branch principal acordada).
-- [ ] Todos os critérios de aceite (CA-01 a CA-12) verificados.
-- [ ] Testes novos cobrindo: middleware de `request_id`, cada classe de exception handler, redaction de senhas.
-- [ ] Suíte completa de testes (backend) passando em local e CI.
-- [ ] Linter de segurança (bandit, se ativo) sem novas findings de severidade >= MEDIUM.
-- [ ] Nenhum `print()` remanescente em `backend/app/`.
-- [ ] Nenhum `except Exception: pass` em `backend/app/`.
-- [ ] README ou doc operacional atualizado com instrução de como ler logs em DEV e em PROD.
-- [ ] Aprovação de code review por pelo menos 1 par.
+## 9. Fora de Escopo
 
-## 10. Dependências e Premissas Técnicas
+- **D.2 — CRUD completo de usuarios** (lista, detalhe, PUT, DELETE, PATCH role,
+  tela `/usuarios`). Sera tratado em ciclo separado.
+- **D.6 — Importacao de contatos via CSV** (upload, mapping, dry-run).
+- **D.7 — Dashboard de metricas** (`/dashboard`, `GET /stats`).
+- **D.8 — Recuperacao de senha por e-mail**.
+- **D.9 — Tags / categorias em contatos**.
+- **D.10 — Acessibilidade global e axe-core no CI** (apenas o minimo necessario
+  para os componentes desta entrega).
+- **D.11 — Internacionalizacao (i18n) com next-intl**.
+- **Fase A** completa (httpOnly cookie, SECRET_KEY forte, CORS via env,
+  rate limit composto, TrustedHost, politica de senha).
+- **Fase B.3 a B.5** (Sentry, audit log persistente, healthcheck).
+- **Fase C completa**, exceto o estritamente necessario para esta entrega: hook
+  `useDebounce` reusavel (C.2) e indices em colunas frequentes (C.6) — apenas as
+  colunas exigidas por D.1 e D.4.
+- **Fase E** inteira (Docker, PostgreSQL, CI/CD, dark mode, pre-commit, retry
+  HTTP).
+- Exportacao em outros formatos (PDF, JSON).
+- Agendamento de exportacao recorrente.
+- Limites de quota/throttle especificos para exportacao alem do rate limit global
+  ja existente.
 
-- **Dependência interna**: `backend/app/config.py` já expõe `ENV`; nenhum trabalho adicional é necessário para detectar ambiente.
-- **Dependência de pacote**: adicionar `python-json-logger` ao `requirements.txt` (versão pinned).
-- **Premissa**: Sentry (B.3) NÃO é integrado nesta fase — porém o desenho de logging deve permitir que B.3 seja plugado depois sem refatorações.
-- **Premissa**: O usuário autenticado é resolvido pela dependência `Depends(get_current_user)` já existente; o middleware NÃO duplica essa lógica — apenas lê `request.state.user_id` se a dependência tiver preenchido.
-- **Premissa**: Não há requisito de centralizar logs em agregador externo (Datadog/CloudWatch) nesta entrega — stdout é o destino.
+## 10. Riscos e Premissas
 
-## 11. Riscos e Mitigações
-
-| Risco | Impacto | Mitigação |
+| # | Risco | Mitigacao |
 |---|---|---|
-| Logging síncrono em hot path degrada latência | Médio | Manter nível `INFO` em rotas, `DEBUG` apenas dentro de services; medir p50/p95 antes e depois e validar contra RNF-01. |
-| Vazamento acidental de senha/token em log | Alto (PCI/LGPD) | Filtro de redaction obrigatório (RF-08) + teste automatizado (CA-10). Revisão manual dos pontos onde se loga `request.body`. |
-| Refactor de `HTTPException` quebra teste regressivo | Médio | Substituições feitas uma a uma, com a suíte rodando após cada mudança. Comportamento HTTP visível precisa permanecer idêntico (CA-12). |
-| `contextvars` mal propagado em handlers async | Médio | Cobrir com teste async dedicado; usar `ContextVar.set()` no middleware ANTES de `await call_next(request)`. |
-| Remoção do `except Exception: pass` quebra startup | Baixo | Investigar a intenção original do bloco (provavelmente criação tolerante de tabelas) antes de remover; substituir por log + propagação controlada. |
-| Volume excessivo de logs em PROD aumenta custo | Baixo | Padronizar níveis: rotas em `INFO`, services em `DEBUG`, erros em `ERROR`/`WARNING`. Sem `INFO` dentro de loops. |
+| R1 | SQLite pode degradar em exportacao de bases > 50k linhas | Limitar exportacao por configuracao; promover migracao para PostgreSQL (E.2) em fase posterior |
+| R2 | Mudanca de contrato no campo telefone (formatado vs digits-only) pode quebrar integradores | Documentar contrato no PRD / OpenAPI; aplicar apenas validacao (sem mudar tipo da coluna) |
+| R3 | Validacao por `sort_by` exposto a injection caso seja concatenado em SQL | Allowlist enum + `getattr(Model, col)` apos validacao; vetada concatenacao de string |
+| R4 | Streaming XLSX e mais complexo que CSV (openpyxl tende a carregar em memoria) | Avaliar `xlsxwriter` ou geracao em chunks; em ultimo caso, limitar XLSX a N linhas e oferecer CSV para volumes maiores |
+| R5 | Indices novos podem aumentar tempo de write em INSERT/UPDATE | Aceitavel para volume atual; revisar quando migrar para PostgreSQL |
+| R6 | Filtros + ordenacao + busca podem produzir querystrings muito longas | Aceitavel — limite de URL no Next/FastAPI cobre o caso de uso |
+| R7 | Mascara de telefone pode atrapalhar colagem de telefones ja formatados em outros padroes | Aceitar input formatado e digits-only no parser do `react-input-mask`; rejeitar apenas no submit |
 
-## 12. Fora de Escopo
+Premissas chave (resumo):
 
-- **B.3 — Integração com Sentry** (backend e frontend) — fica para fase posterior.
-- **B.4 — Audit log persistente em tabela `audit_log`** — fica para fase posterior.
-- **B.5 — Healthcheck `/health/live` e `/health/ready`** — fica para fase posterior (será necessário para Docker/K8s em Fase E).
-- Qualquer item das Fases A, C, D, E do roadmap v2.
-- Mudanças em contratos públicos da API.
-- Frontend: nenhuma alteração em `frontend/` faz parte desta entrega.
-- Integração com agregadores externos de log (Datadog, CloudWatch, ELK).
-- Métricas / tracing distribuído (OpenTelemetry) — não solicitado.
-- Configuração de níveis de log dinâmica em runtime — fora do escopo.
+- Telefone permanece **opcional**.
+- Exportacao **ignora paginacao** e respeita filtro/busca/ordem.
+- Lixeira **nao** entra na exportacao.
+- `useDebounce` sera consolidado em `frontend/src/hooks/useDebounce.ts`.
+- Indices serao criados via Alembic dentro deste pacote.
+
+---
+
+**PRONTO PARA O ORQUESTRADOR CRIAR ISSUE NO JIRA**
