@@ -1,13 +1,17 @@
 """Bootstrap HTTP para deploy no Render — não usado em modo stdio local."""
 import os
 import sys
+import traceback
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from server import mcp  # noqa: E402
+print(f"Python: {sys.version}", flush=True)
+print(f"PORT: {os.getenv('PORT', '8001')}", flush=True)
 
-port = int(os.getenv("PORT", "8001"))
-
-# host="0.0.0.0" configura TrustedHostMiddleware com allowed_hosts=["*"]
-# permitindo qualquer domínio externo (necessário para o Render)
-mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+try:
+    from server import mcp
+    port = int(os.getenv("PORT", "8001"))
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+except Exception:
+    traceback.print_exc()
+    sys.exit(1)
