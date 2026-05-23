@@ -12,7 +12,11 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 _token: Optional[str] = None
 
-mcp = FastMCP("contatos-mcp")
+mcp = FastMCP(
+    "contatos-mcp",
+    host="0.0.0.0",
+    port=int(os.getenv("PORT", "8000")),
+)
 
 
 def _login() -> str:
